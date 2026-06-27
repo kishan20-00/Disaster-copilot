@@ -591,88 +591,75 @@ export default function App() {
 
   }, [googleMapsLoaded, personalContext.location, dynamicMarkers, mapLayer, currentStep, user, isBypassed, livePosition, liveRoute, liveShelter]);
 
-  // Dynamic Google Places API Fetching and Syncing — fully data-driven, no hardcoded markers.
+  // Dynamic Places API (New) fetcher — uses google.maps.places.Place.searchNearby.
+  // Requires "Places API (New)" enabled in Google Cloud Console.
   useEffect(() => {
-    if (!googleMapsLoaded || !mapInstanceRef.current || !mapCenter || typeof google === 'undefined' || !google.maps || !google.maps.places) return;
+    if (!googleMapsLoaded || !mapCenter || typeof google === 'undefined' || !google.maps?.places?.Place) return;
 
     const CATEGORY_TYPES: Record<string, string[]> = {
-      shelter: ['school', 'park', 'stadium', 'university', 'city_hall', 'local_government_office', 'gym'],
-      water: ['convenience_store', 'supermarket', 'drinking_water', 'gas_station'],
-      medical: ['hospital', 'pharmacy', 'doctor', 'health'],
+      shelter: ['school', 'park', 'stadium', 'university', 'city_hall', 'gym'],
+      water: ['convenience_store', 'supermarket', 'gas_station'],
+      medical: ['hospital', 'pharmacy', 'doctor'],
       station: ['transit_station', 'subway_station', 'train_station', 'bus_station']
     };
 
-    const activeCategories = filterCategory === 'all'
+    const activeCategories: string[] = filterCategory === 'all'
       ? ['shelter', 'water', 'medical', 'station']
       : [filterCategory];
 
-    const searchConfigs: { category: string; type: string }[] = activeCategories.flatMap((cat) =>
-      (CATEGORY_TYPES[cat] || []).map((type) => ({ category: cat, type }))
-    );
+    const { Place, SearchNearbyRankPreference } = google.maps.places as any;
 
-    if (searchConfigs.length === 0) {
-      setDynamicMarkers([]);
-      return;
-    }
-
-    const service = new google.maps.places.PlacesService(mapInstanceRef.current);
-    const PlacesStatus = google.maps.places.PlacesServiceStatus;
-
-    const searchPromises = searchConfigs.map((cfg) => {
-      return new Promise<{ status: string; rows: any[] }>((resolve) => {
-        service.nearbySearch(
-          { location: mapCenter, radius: 3000, type: cfg.type },
-          (results: any, status: any) => {
-            if (status === PlacesStatus.OK && results) {
-              const rows = results.map((place: any) => {
-                const descSuffix =
-                  cfg.category === 'shelter' ? (cfg.type === 'school' ? 'Designated school shelter.' : cfg.type === 'park' ? 'Open park shelter space.' : 'Open civic shelter point.') :
-                  cfg.category === 'water' ? (cfg.type === 'drinking_water' ? 'Public drinking water source.' : 'Emergency water / supply node.') :
-                  cfg.category === 'medical' ? 'Emergency medical / triage station.' :
-                  'Active evacuation transit point.';
-                return {
-                  id: place.place_id,
-                  category: cfg.category,
-                  name: place.name,
-                  lat: place.geometry.location.lat(),
-                  lng: place.geometry.location.lng(),
-                  desc: `${place.vicinity || 'Tokyo, Japan'}. ${descSuffix}`,
-                  x: 0,
-                  y: 0
-                };
-              });
-              resolve({ status: 'OK', rows });
-            } else {
-              resolve({ status: String(status), rows: [] });
-            }
-          }
-        );
-      });
+    const searches = activeCategories.map(async (cat) => {
+      try {
+        const res = await Place.searchNearby({
+          fields: ['id', 'displayName', 'location', 'formattedAddress', 'types'],
+          locationRestriction: { center: mapCenter, radius: 3000 },
+          includedPrimaryTypes: CATEGORY_TYPES[cat],
+          maxResultCount: 20,
+          rankPreference: SearchNearbyRankPreference?.DISTANCE
+        });
+        const places = res?.places ?? [];
+        return places.map((p: any) => {
+          const loc = p.location;
+          const lat = typeof loc?.lat === 'function' ? loc.lat() : loc?.lat;
+          const lng = typeof loc?.lng === 'function' ? loc.lng() : loc?.lng;
+          const name = typeof p.displayName === 'string' ? p.displayName : (p.displayName?.text ?? 'Unknown');
+          const descSuffix =
+            cat === 'shelter' ? 'Designated shelter point.' :
+            cat === 'water' ? 'Emergency water / supply node.' :
+            cat === 'medical' ? 'Emergency medical / triage point.' :
+            'Active evacuation transit point.';
+          return {
+            id: p.id,
+            category: cat,
+            name,
+            lat,
+            lng,
+            desc: `${p.formattedAddress || 'Tokyo, Japan'}. ${descSuffix}`,
+            x: 0,
+            y: 0
+          };
+        });
+      } catch (err) {
+        console.warn(`[Places-New] ${cat} failed`, err);
+        return [] as any[];
+      }
     });
 
-    Promise.all(searchPromises).then((resultsArray) => {
-      const statusCounts: Record<string, number> = {};
-      const allMerged: any[] = [];
-      resultsArray.forEach((r, i) => {
-        statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
-        if (r.status !== 'OK') {
-          console.warn(`[Places] ${searchConfigs[i].category}/${searchConfigs[i].type} → ${r.status}`);
-        }
-        allMerged.push(...r.rows);
-      });
-      console.info('[Places] query summary', { center: mapCenter, configs: searchConfigs.length, statuses: statusCounts, totalRaw: allMerged.length });
-
-      const uniqueMap = new Map();
-      allMerged.forEach((item) => {
-        if (!uniqueMap.has(item.id)) uniqueMap.set(item.id, item);
+    Promise.all(searches).then((arrays) => {
+      const merged = arrays.flat();
+      const uniqueMap = new Map<string, any>();
+      merged.forEach((item) => {
+        if (item.id && !uniqueMap.has(item.id)) uniqueMap.set(item.id, item);
       });
       const deduplicated = Array.from(uniqueMap.values());
+      console.info('[Places-New] result', { categories: activeCategories.length, total: deduplicated.length });
 
       const final = deduplicated.filter((m: any) => {
         if (!searchQuery) return true;
         return (
-          m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          m.desc.toLowerCase().includes(searchQuery.toLowerCase())
+          (m.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (m.desc || '').toLowerCase().includes(searchQuery.toLowerCase())
         );
       });
       setDynamicMarkers(final);
