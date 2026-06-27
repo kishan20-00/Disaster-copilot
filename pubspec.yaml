@@ -1,0 +1,26 @@
+name: disaster_copilot_flutter
+description: Mamori AI - Personal Multilingual Disaster Co-pilot built in Flutter for the Google Japan Hackathon.
+version: 1.0.0+1
+
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  google_generative_ai: ^0.4.0
+  http: ^1.2.0
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
