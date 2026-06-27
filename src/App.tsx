@@ -90,23 +90,84 @@ const LANGUAGES_MAP = {
 
 const locationMarkers = {
   Shibuya: [
-    { id: 'shibuya-shelter', category: 'shelter', name: 'Miyashita Park Shelter', x: 252, y: 345, lat: 35.6617, lng: 139.7020, desc: 'Elevated open-air park. Capacity: 5,000. ADA Access verified.' },
+    { 
+      id: 'shibuya-shelter', 
+      category: 'shelter', 
+      name: 'Miyashita Park Shelter', 
+      shortName: 'Miyashita Park',
+      shortNameJa: '宮下公園',
+      shortNameZh: '宫下公园',
+      shortNameVi: 'Công viên Miyashita',
+      distance: '400m',
+      detailDesc: 'Open, elevated shelter, 400m, ADA compliant path available',
+      x: 252, y: 345, 
+      lat: 35.6617, lng: 139.7020, 
+      desc: 'Elevated open-air park. Capacity: 5,000. ADA Access verified.' 
+    },
     { id: 'shibuya-water', category: 'water', name: 'Shibuya Well Station', x: 120, y: 320, lat: 35.6585, lng: 139.6975, desc: 'Solar-powered ground aquifer water tap. Active.' },
     { id: 'shibuya-medical', category: 'medical', name: 'Shibuya Triage Center', x: 280, y: 550, lat: 35.6558, lng: 139.7040, desc: 'First aid, blankets, and local network routing.' },
     { id: 'shibuya-hazard', category: 'hazard', name: 'Fallen Glass Hazard', x: 100, y: 450, lat: 35.6575, lng: 139.6995, desc: 'Shattered facade glass. Blocked road.' }
   ],
   Minato: [
-    { id: 'minato-shelter', category: 'shelter', name: 'Shiba Park Shelter', x: 210, y: 390, lat: 35.6556, lng: 139.7483, desc: 'Large open-ground shelter near Tokyo Tower. Capacity: 8,000.' },
+    { 
+      id: 'minato-shelter', 
+      category: 'shelter', 
+      name: 'Shiba Park Shelter', 
+      shortName: 'Shiba Park',
+      shortNameJa: '芝公園',
+      shortNameZh: '芝公园',
+      shortNameVi: 'Công viên Shiba',
+      distance: '650m',
+      detailDesc: 'Open, 650m',
+      x: 210, y: 390, 
+      lat: 35.6556, lng: 139.7483, 
+      desc: 'Large open-ground shelter near Tokyo Tower. Capacity: 8,000.' 
+    },
     { id: 'minato-water', category: 'water', name: 'Tokyo Tower Water Reservoir', x: 100, y: 250, lat: 35.6586, lng: 139.7454, desc: 'Underground emergency fresh-water supply.' },
     { id: 'minato-medical', category: 'medical', name: 'Roppongi Medical Clinic', x: 290, y: 520, lat: 35.6620, lng: 139.7330, desc: 'Triage team active. Emergency generator operational.' },
     { id: 'minato-hazard', category: 'hazard', name: 'Structural Risk: Overpass', x: 150, y: 580, lat: 35.6530, lng: 139.7420, desc: 'Highway structural cracks. High risk area.' }
   ],
   Shinjuku: [
-    { id: 'shinjuku-shelter', category: 'shelter', name: 'Shinjuku Gyoen Shelter', x: 250, y: 490, lat: 35.6852, lng: 139.7095, desc: 'Massive open park refuge. Capacity: 25,000. Windbreak forest.' },
+    { 
+      id: 'shinjuku-shelter', 
+      category: 'shelter', 
+      name: 'Shinjuku Gyoen Shelter', 
+      shortName: 'Shinjuku Gyoen',
+      shortNameJa: '新宿御苑',
+      shortNameZh: '新宿御苑',
+      shortNameVi: 'Công viên Shinjuku Gyoen',
+      distance: '800m',
+      detailDesc: 'Open, 800m',
+      x: 250, y: 490, 
+      lat: 35.6852, lng: 139.7095, 
+      desc: 'Massive open park refuge. Capacity: 25,000. Windbreak forest.' 
+    },
     { id: 'shinjuku-water', category: 'water', name: 'Gyoen Water Station', x: 300, y: 310, lat: 35.6880, lng: 139.7130, desc: 'Clean groundwater well with manual pumps.' },
     { id: 'shinjuku-medical', category: 'medical', name: 'Shinjuku First Aid Tent', x: 110, y: 420, lat: 35.6895, lng: 139.6990, desc: 'Red Cross outpost. Medical supplies stocked.' },
     { id: 'shinjuku-hazard', category: 'hazard', name: 'Subway Flooding', x: 190, y: 200, lat: 35.6905, lng: 139.7040, desc: 'Underground tunnel ingress. Closed.' }
   ]
+};
+
+// Helper to get shelter information dynamically without hardcoding
+const getShelterInfo = (location: string, language: string) => {
+  const markers = locationMarkers[location as keyof typeof locationMarkers] || [];
+  const shelter = markers.find(m => m.category === 'shelter') as any;
+  if (!shelter) {
+    return { name: 'Emergency Shelter', distance: '400m', detail: 'Open shelter', fullName: 'Emergency Shelter', desc: '' };
+  }
+
+  let name = shelter.shortName;
+  if (language === 'Japanese') name = shelter.shortNameJa;
+  else if (language === 'Chinese') name = shelter.shortNameZh;
+  else if (language === 'Vietnamese') name = shelter.shortNameVi;
+
+  return {
+    name: name || shelter.shortName,
+    fullName: shelter.name,
+    distance: shelter.distance,
+    detail: shelter.detailDesc,
+    desc: shelter.desc
+  };
 };
 
 // Helper to parse JWT from Google Identity Services token without external packages
@@ -519,7 +580,8 @@ export default function App() {
       });
 
       // Step 3: Route
-      const shelter = personalContext.location === 'Shibuya' ? 'Miyashita Park (400m)' : personalContext.location === 'Minato' ? 'Shiba Park (650m)' : 'Shinjuku Gyoen (800m)';
+      const shelterInfo = getShelterInfo(personalContext.location, language);
+      const shelter = `${shelterInfo.name} (${shelterInfo.distance})`;
       steps.push({
         num: "3",
         title: language === 'English' ? `Evacuate to ${shelter}` : language === 'Chinese' ? `前往 ${shelter} 避难` : language === 'Vietnamese' ? `Sơ tán đến ${shelter}` : `${shelter} へ避難`,
@@ -613,7 +675,8 @@ export default function App() {
       // Step 2: Route & Shelter Agent runs
       setAgents(prev => prev.map((a, i) => i === 2 ? { ...a, status: 'running' } : a));
       const t = setTimeout(() => {
-        const shelter = personalContext.location === 'Shibuya' ? 'Miyashita Park (Open, elevated shelter, 400m, ADA compliant path available)' : personalContext.location === 'Minato' ? 'Shiba Park (Open, 650m)' : 'Shinjuku Gyoen (Open, 800m)';
+        const shelterInfo = getShelterInfo(personalContext.location, 'English');
+        const shelter = `${shelterInfo.name} (${shelterInfo.detail})`;
         setAgents(prev => prev.map((a, i) => i === 2 ? { 
           ...a, 
           status: 'completed', 
@@ -678,21 +741,59 @@ export default function App() {
   // Get the drafted message text
   const getDraftedSmsText = () => {
     const lang = personalContext.language;
+    const loc = personalContext.location;
+    const floorClean = personalContext.floor.replace(' Floor', '');
+    
+    // Dynamic localization maps
+    const localizedLocMap: Record<string, Record<string, string>> = {
+      Shibuya: { English: 'Shibuya', Chinese: '涉谷', Vietnamese: 'Shibuya', Japanese: '渋谷' },
+      Minato: { English: 'Minato', Chinese: '港区', Vietnamese: 'Minato', Japanese: '港区' },
+      Shinjuku: { English: 'Shinjuku', Chinese: '新宿', Vietnamese: 'Shinjuku', Japanese: '新宿' }
+    };
+    
+    const trackerUrlMap: Record<string, string> = {
+      Shibuya: 'https://saferoute.ai/t/shib',
+      Minato: 'https://saferoute.ai/t/mina',
+      Shinjuku: 'https://saferoute.ai/t/shinj'
+    };
+
+    const locName = (localizedLocMap[loc] && localizedLocMap[loc][lang]) || loc;
+    const shelterName = getShelterInfo(loc, lang).name;
+    const trackerUrl = trackerUrlMap[loc] || 'https://saferoute.ai/t/shib';
+
     if (activeHazard === 'earthquake') {
-      if (lang === 'English') return `Alert: Strong quake in Shibuya. We're safe (floor ${personalContext.floor.replace(' Floor', '')}, with child). Heading to Miyashita Park. Tracker: https://saferoute.ai/t/shib`;
-      if (lang === 'Chinese') return `警告：涉谷发生强震。我们安全（位于${personalContext.floor}，带孩子）。正撤往宫下公园。追踪链接: https://saferoute.ai/t/shib`;
-      if (lang === 'Vietnamese') return `Cảnh báo: Động đất mạnh ở Shibuya. Chúng tôi ổn (tầng ${personalContext.floor.replace(' Floor', '')}, đi cùng con nhỏ). Đang tới Công viên Miyashita. Bản đồ: https://saferoute.ai/t/shib`;
-      return `【緊急連絡】渋谷で強い地震。無事です（${personalContext.floor}階・子供同伴）。宮下公園へ移動します。現在地：https://saferoute.ai/t/shib`;
+      if (lang === 'English') {
+        return `Alert: Strong quake in ${locName}. We're safe (floor ${floorClean}, with child). Heading to ${shelterName}. Tracker: ${trackerUrl}`;
+      }
+      if (lang === 'Chinese') {
+        return `警告：${locName}发生强震。我们安全（位于${personalContext.floor}，带孩子）。正撤往${shelterName}。追踪链接: ${trackerUrl}`;
+      }
+      if (lang === 'Vietnamese') {
+        return `Cảnh báo: Động chất mạnh ở ${locName}. Chúng tôi ổn (tầng ${floorClean}, đi cùng con nhỏ). Đang tới ${shelterName}. Bản đồ: ${trackerUrl}`;
+      }
+      return `【緊急連絡】${locName}で強い地震。無事です（${personalContext.floor}・子供同伴）。${shelterName}へ移動します。現在地：${trackerUrl}`;
     } else if (activeHazard === 'typhoon') {
-      if (lang === 'English') return `Alert: Category 4 Typhoon in Tokyo. Staying inside on floor ${personalContext.floor.replace(' Floor', '')}. Secured. Track: https://saferoute.ai/t/shib`;
-      if (lang === 'Chinese') return `警告：台风4级登陆东京。我们在${personalContext.floor}室内避险。一切安好。追踪: https://saferoute.ai/t/shib`;
-      if (lang === 'Vietnamese') return `Cảnh báo: Bão Cấp 4 ở Tokyo. Đang trú ẩn ở tầng ${personalContext.floor.replace(' Floor', '')}. An toàn. Định vị: https://saferoute.ai/t/shib`;
-      return `【緊急連絡】大型台風接近中。安全に${personalContext.floor}階に留まっています。無事です。GPS：https://saferoute.ai/t/shib`;
+      if (lang === 'English') {
+        return `Alert: Category 4 Typhoon in Tokyo. Staying inside on floor ${floorClean}. Secured. Track: ${trackerUrl}`;
+      }
+      if (lang === 'Chinese') {
+        return `警告：台风4级登陆东京。我们在${personalContext.floor}室内避险。一切安好。追踪: ${trackerUrl}`;
+      }
+      if (lang === 'Vietnamese') {
+        return `Cảnh báo: Bão Cấp 4 ở Tokyo. Đang trú ẩn ở tầng ${floorClean}. An toàn. Định vị: ${trackerUrl}`;
+      }
+      return `【緊急連絡】大型台風接近中。安全に${personalContext.floor}に留まっています。無事です。GPS：${trackerUrl}`;
     } else {
-      if (lang === 'English') return `Alert: Major Tsunami Warning! Evacuating to safe vertical height. Position: Shibuya. Track: https://saferoute.ai/t/shib`;
-      if (lang === 'Chinese') return `紧急警报：大海啸预警！我们正前往高处垂直避难。涩谷。追踪: https://saferoute.ai/t/shib`;
-      if (lang === 'Vietnamese') return `Cảnh báo khẩn: Sóng thần lớn! Đang sơ tán lên vùng cao an toàn. Shibuya. Định vị: https://saferoute.ai/t/shib`;
-      return `【大津波警報】津波から避難するため、高台へ向かっています。現在地：渋谷。URL: https://saferoute.ai/t/shib`;
+      if (lang === 'English') {
+        return `Alert: Major Tsunami Warning! Evacuating to safe vertical height. Position: ${locName}. Track: ${trackerUrl}`;
+      }
+      if (lang === 'Chinese') {
+        return `紧急警报：大海啸预警！我们正前往高处垂直避难。${locName}。追踪: ${trackerUrl}`;
+      }
+      if (lang === 'Vietnamese') {
+        return `Cảnh báo khẩn: Sóng thần lớn! Đang sơ tán lên vùng cao an toàn. ${locName}. Định vị: ${trackerUrl}`;
+      }
+      return `【大津波警報】津波から避難するため、高台へ向かっています。現在地：${locName}。URL: ${trackerUrl}`;
     }
   };
 
@@ -1294,7 +1395,7 @@ export default function App() {
                     <div className="flex flex-col">
                       <span className="text-xs font-black tracking-tight text-white font-sans uppercase">
                         {currentStep >= 4 
-                          ? (personalContext.location === 'Shibuya' ? 'Miyashita Park Safe Route' : personalContext.location === 'Minato' ? 'Shiba Park Safe Route' : 'Shinjuku Gyoen Safe Route')
+                          ? `${getShelterInfo(personalContext.location, 'English').name} Safe Route`
                           : currentStep >= 0 
                           ? '📡 Analyzing active safety route...'
                           : '🟢 SafeRoute AI Active'}
