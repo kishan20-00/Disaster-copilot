@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'Mamori AI - Disaster Co-pilot',
-        short_name: 'Mamori AI',
+        name: 'SafeRoute AI - Disaster Co-pilot',
+        short_name: 'SafeRoute AI',
         description: 'Personal multilingual disaster co-pilot with human-in-the-loop safety.',
         theme_color: '#0f172a',
         background_color: '#0f172a',

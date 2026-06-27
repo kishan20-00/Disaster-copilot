@@ -25,6 +25,9 @@ import {
   User
 } from 'lucide-react';
 
+// Global declaration for Google Identity Services script
+declare const google: any;
+
 // Define TS interfaces for our state
 interface AgentState {
   id: string;
@@ -81,6 +84,25 @@ const LANGUAGES_MAP = {
   }
 };
 
+// Helper to parse JWT from Google Identity Services token without external packages
+function parseJwt(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error("Failed to parse JWT token", error);
+    return null;
+  }
+}
+
 export default function App() {
   // Authentication & Session States
   const [user, setUser] = useState<{ name: string; email: string; avatar?: string } | null>(null);
@@ -107,18 +129,72 @@ export default function App() {
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [smsStatus, setSmsStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
 
-  // Handle Google Sign-In Simulation
-  const handleGoogleSignIn = () => {
-    setAuthLoading('google');
-    setTimeout(() => {
-      setUser({
-        name: "Kishan Steve",
-        email: "kishansteve@gmail.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Kishan"
-      });
+  // Handle Credential Response from Google Sign-In
+  const handleCredentialResponse = (response: any) => {
+    try {
+      setAuthLoading('google');
+      const payload = parseJwt(response.credential);
+      if (payload) {
+        setUser({
+          name: payload.name || payload.given_name || "Google User",
+          email: payload.email,
+          avatar: payload.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${payload.email}`
+        });
+      } else {
+        alert("Authentication failed: Unable to read credentials.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error occurred during Google sign in.");
+    } finally {
       setAuthLoading('none');
-    }, 1500);
+    }
   };
+
+  // Set up Google Identity Services SDK Button on mount/state change
+  useEffect(() => {
+    const initializeGoogleGSI = () => {
+      if (typeof google !== 'undefined' && google.accounts?.id) {
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+        if (!clientId || clientId.includes("your-google-client-id")) {
+          console.warn("VITE_GOOGLE_CLIENT_ID is not configured yet. Please configure it in .env file.");
+        }
+        google.accounts.id.initialize({
+          client_id: clientId || 'dummy-client-id.apps.googleusercontent.com',
+          callback: handleCredentialResponse,
+          auto_select: false,
+          cancel_on_tap_outside: true
+        });
+
+        const btnParent = document.getElementById("google-signin-button");
+        if (btnParent) {
+          google.accounts.id.renderButton(
+            btnParent,
+            { 
+              theme: "filled_blue", 
+              size: "large", 
+              text: "signin_with", 
+              shape: "pill",
+              width: btnParent.clientWidth || 320 
+            }
+          );
+        }
+      }
+    };
+
+    // Try immediately
+    initializeGoogleGSI();
+
+    // Poll to check if the async defer script is loaded
+    const interval = setInterval(() => {
+      if (typeof google !== 'undefined' && google.accounts?.id) {
+        initializeGoogleGSI();
+        clearInterval(interval);
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [user, isBypassed]);
 
   // Handle Email Sign-In Simulation
   const handleEmailSignIn = (e: React.FormEvent) => {
@@ -375,20 +451,20 @@ export default function App() {
   const getDraftedSmsText = () => {
     const lang = personalContext.language;
     if (activeHazard === 'earthquake') {
-      if (lang === 'English') return `Alert: Strong quake in Shibuya. We're safe (floor ${personalContext.floor.replace(' Floor', '')}, with child). Heading to Miyashita Park. Tracker: https://mamori.ai/t/shib`;
-      if (lang === 'Chinese') return `警告：涉谷发生强震。我们安全（位于${personalContext.floor}，带孩子）。正撤往宫下公园。追踪链接: https://mamori.ai/t/shib`;
-      if (lang === 'Vietnamese') return `Cảnh báo: Động đất mạnh ở Shibuya. Chúng tôi ổn (tầng ${personalContext.floor.replace(' Floor', '')}, đi cùng con nhỏ). Đang tới Công viên Miyashita. Bản đồ: https://mamori.ai/t/shib`;
-      return `【緊急連絡】渋谷で強い地震。無事です（${personalContext.floor}階・子供同伴）。宮下公園へ移動します。現在地：https://mamori.ai/t/shib`;
+      if (lang === 'English') return `Alert: Strong quake in Shibuya. We're safe (floor ${personalContext.floor.replace(' Floor', '')}, with child). Heading to Miyashita Park. Tracker: https://saferoute.ai/t/shib`;
+      if (lang === 'Chinese') return `警告：涉谷发生强震。我们安全（位于${personalContext.floor}，带孩子）。正撤往宫下公园。追踪链接: https://saferoute.ai/t/shib`;
+      if (lang === 'Vietnamese') return `Cảnh báo: Động đất mạnh ở Shibuya. Chúng tôi ổn (tầng ${personalContext.floor.replace(' Floor', '')}, đi cùng con nhỏ). Đang tới Công viên Miyashita. Bản đồ: https://saferoute.ai/t/shib`;
+      return `【緊急連絡】渋谷で強い地震。無事です（${personalContext.floor}階・子供同伴）。宮下公園へ移動します。現在地：https://saferoute.ai/t/shib`;
     } else if (activeHazard === 'typhoon') {
-      if (lang === 'English') return `Alert: Category 4 Typhoon in Tokyo. Staying inside on floor ${personalContext.floor.replace(' Floor', '')}. Secured. Track: https://mamori.ai/t/shib`;
-      if (lang === 'Chinese') return `警告：台风4级登陆东京。我们在${personalContext.floor}室内避险。一切安好。追踪: https://mamori.ai/t/shib`;
-      if (lang === 'Vietnamese') return `Cảnh báo: Bão Cấp 4 ở Tokyo. Đang trú ẩn ở tầng ${personalContext.floor.replace(' Floor', '')}. An toàn. Định vị: https://mamori.ai/t/shib`;
-      return `【緊急連絡】大型台風接近中。安全に${personalContext.floor}階に留まっています。無事です。GPS：https://mamori.ai/t/shib`;
+      if (lang === 'English') return `Alert: Category 4 Typhoon in Tokyo. Staying inside on floor ${personalContext.floor.replace(' Floor', '')}. Secured. Track: https://saferoute.ai/t/shib`;
+      if (lang === 'Chinese') return `警告：台风4级登陆东京。我们在${personalContext.floor}室内避险。一切安好。追踪: https://saferoute.ai/t/shib`;
+      if (lang === 'Vietnamese') return `Cảnh báo: Bão Cấp 4 ở Tokyo. Đang trú ẩn ở tầng ${personalContext.floor.replace(' Floor', '')}. An toàn. Định vị: https://saferoute.ai/t/shib`;
+      return `【緊急連絡】大型台風接近中。安全に${personalContext.floor}階に留まっています。無事です。GPS：https://saferoute.ai/t/shib`;
     } else {
-      if (lang === 'English') return `Alert: Major Tsunami Warning! Evacuating to safe vertical height. Position: Shibuya. Track: https://mamori.ai/t/shib`;
-      if (lang === 'Chinese') return `紧急警报：大海啸预警！我们正前往高处垂直避难。涩谷。追踪: https://mamori.ai/t/shib`;
-      if (lang === 'Vietnamese') return `Cảnh báo khẩn: Sóng thần lớn! Đang sơ tán lên vùng cao an toàn. Shibuya. Định vị: https://mamori.ai/t/shib`;
-      return `【大津波警報】津波から避難するため、高台へ向かっています。現在地：渋谷。URL: https://mamori.ai/t/shib`;
+      if (lang === 'English') return `Alert: Major Tsunami Warning! Evacuating to safe vertical height. Position: Shibuya. Track: https://saferoute.ai/t/shib`;
+      if (lang === 'Chinese') return `紧急警报：大海啸预警！我们正前往高处垂直避难。涩谷。追踪: https://saferoute.ai/t/shib`;
+      if (lang === 'Vietnamese') return `Cảnh báo khẩn: Sóng thần lớn! Đang sơ tán lên vùng cao an toàn. Shibuya. Định vị: https://saferoute.ai/t/shib`;
+      return `【大津波警報】津波から避難するため、高台へ向かっています。現在地：渋谷。URL: https://saferoute.ai/t/shib`;
     }
   };
 
@@ -399,7 +475,7 @@ export default function App() {
         <div className="flex items-center gap-2 mb-1">
           <Shield className="w-8 h-8 text-indigo-400 animate-pulse" />
           <h1 className="text-3xl font-extrabold tracking-tight text-white font-sans">
-            Mamori AI <span className="text-indigo-400 text-lg font-medium font-sans">安心守り</span>
+            SafeRoute AI <span className="text-indigo-400 text-lg font-medium font-sans">安心避難</span>
           </h1>
         </div>
         <p className="text-slate-400 text-sm max-w-sm">
@@ -434,45 +510,28 @@ export default function App() {
                   <Shield className="w-8 h-8 text-indigo-400 animate-pulse" />
                 </div>
               </div>
-              <h2 className="text-xl font-black tracking-tight text-white font-sans uppercase">Mamori AI</h2>
-              <span className="text-[10px] text-indigo-400 font-mono tracking-widest uppercase font-bold">安心守り • Disaster Co-pilot</span>
+              <h2 className="text-xl font-black tracking-tight text-white font-sans uppercase">SafeRoute AI</h2>
+              <span className="text-[10px] text-indigo-400 font-mono tracking-widest uppercase font-bold">安心避難 • Disaster Co-pilot</span>
               <p className="text-slate-400 text-xs px-4 mt-3 leading-relaxed">
                 Active multi-agent advisor for urban hazards. Verify identity to sync contacts, medical records, and live telemetry.
               </p>
             </div>
 
-            {/* Simulated OAuth & Email Credentials Login */}
+            {/* Real Google OAuth & Email Credentials Login */}
             <div className="my-6 space-y-4">
               {/* Google OAuth Login Button */}
-              <button
-                onClick={handleGoogleSignIn}
-                disabled={authLoading !== 'none'}
-                className="w-full h-11 bg-white hover:bg-slate-100 text-slate-900 font-extrabold rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2.5 active:scale-[0.98] disabled:opacity-50 text-[11px]"
-              >
-                {authLoading === 'google' ? (
-                  <span className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    />
-                  </svg>
+              <div className="w-full flex flex-col items-center">
+                <div 
+                  id="google-signin-button" 
+                  className="w-full flex justify-center h-11"
+                />
+                {authLoading === 'google' && (
+                  <div className="mt-2 text-[10px] text-indigo-400 font-mono flex items-center gap-1.5 animate-pulse">
+                    <span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                    Securely connecting to Google Identity Services...
+                  </div>
                 )}
-                {authLoading === 'google' ? "Signing in..." : "Sign In with Google ID"}
-              </button>
+              </div>
 
               {/* Styled Divider */}
               <div className="flex items-center gap-3 py-1">
@@ -930,7 +989,7 @@ export default function App() {
               <div className="flex gap-1.5 items-center">
                 <Compass className="w-5 h-5 text-indigo-400 animate-spin" style={{ animationDuration: '6s' }} />
                 <div className="flex flex-col">
-                  <span className="text-[11px] font-extrabold text-slate-200 leading-none tracking-wide font-sans uppercase">Mamori AI</span>
+                  <span className="text-[11px] font-extrabold text-slate-200 leading-none tracking-wide font-sans uppercase">SafeRoute AI</span>
                   <span className="text-[9px] text-slate-500 font-mono leading-none mt-0.5">Offline-Ready v1.0.0</span>
                 </div>
               </div>
