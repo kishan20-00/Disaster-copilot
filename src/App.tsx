@@ -235,6 +235,13 @@ export default function App() {
           { featureType: "water", elementType: "geometry", stylers: [{ color: "#090d16" }] }
         ]
       });
+      // Force Google Maps to recalculate container boundaries and center after the DOM paints
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          google.maps.event.trigger(mapInstanceRef.current, 'resize');
+          mapInstanceRef.current.setCenter(center);
+        }
+      }, 150);
     } else {
       mapInstanceRef.current.setCenter(center);
     }
