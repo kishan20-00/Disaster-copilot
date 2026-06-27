@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Shield,
   Activity,
@@ -90,22 +90,22 @@ const LANGUAGES_MAP = {
 
 const locationMarkers = {
   Shibuya: [
-    { id: 'shibuya-shelter', category: 'shelter', name: 'Miyashita Park Shelter', x: 252, y: 345, desc: 'Elevated open-air park. Capacity: 5,000. ADA Access verified.' },
-    { id: 'shibuya-water', category: 'water', name: 'Shibuya Well Station', x: 120, y: 320, desc: 'Solar-powered ground aquifer water tap. Active.' },
-    { id: 'shibuya-medical', category: 'medical', name: 'Shibuya Triage Center', x: 280, y: 550, desc: 'First aid, blankets, and local network routing.' },
-    { id: 'shibuya-hazard', category: 'hazard', name: 'Fallen Glass Hazard', x: 100, y: 450, desc: 'Shattered facade glass. Blocked road.' }
+    { id: 'shibuya-shelter', category: 'shelter', name: 'Miyashita Park Shelter', x: 252, y: 345, lat: 35.6617, lng: 139.7020, desc: 'Elevated open-air park. Capacity: 5,000. ADA Access verified.' },
+    { id: 'shibuya-water', category: 'water', name: 'Shibuya Well Station', x: 120, y: 320, lat: 35.6585, lng: 139.6975, desc: 'Solar-powered ground aquifer water tap. Active.' },
+    { id: 'shibuya-medical', category: 'medical', name: 'Shibuya Triage Center', x: 280, y: 550, lat: 35.6558, lng: 139.7040, desc: 'First aid, blankets, and local network routing.' },
+    { id: 'shibuya-hazard', category: 'hazard', name: 'Fallen Glass Hazard', x: 100, y: 450, lat: 35.6575, lng: 139.6995, desc: 'Shattered facade glass. Blocked road.' }
   ],
   Minato: [
-    { id: 'minato-shelter', category: 'shelter', name: 'Shiba Park Shelter', x: 210, y: 390, desc: 'Large open-ground shelter near Tokyo Tower. Capacity: 8,000.' },
-    { id: 'minato-water', category: 'water', name: 'Tokyo Tower Water Reservoir', x: 100, y: 250, desc: 'Underground emergency fresh-water supply.' },
-    { id: 'minato-medical', category: 'medical', name: 'Roppongi Medical Clinic', x: 290, y: 520, desc: 'Triage team active. Emergency generator operational.' },
-    { id: 'minato-hazard', category: 'hazard', name: 'Structural Risk: Overpass', x: 150, y: 580, desc: 'Highway structural cracks. High risk area.' }
+    { id: 'minato-shelter', category: 'shelter', name: 'Shiba Park Shelter', x: 210, y: 390, lat: 35.6556, lng: 139.7483, desc: 'Large open-ground shelter near Tokyo Tower. Capacity: 8,000.' },
+    { id: 'minato-water', category: 'water', name: 'Tokyo Tower Water Reservoir', x: 100, y: 250, lat: 35.6586, lng: 139.7454, desc: 'Underground emergency fresh-water supply.' },
+    { id: 'minato-medical', category: 'medical', name: 'Roppongi Medical Clinic', x: 290, y: 520, lat: 35.6620, lng: 139.7330, desc: 'Triage team active. Emergency generator operational.' },
+    { id: 'minato-hazard', category: 'hazard', name: 'Structural Risk: Overpass', x: 150, y: 580, lat: 35.6530, lng: 139.7420, desc: 'Highway structural cracks. High risk area.' }
   ],
   Shinjuku: [
-    { id: 'shinjuku-shelter', category: 'shelter', name: 'Shinjuku Gyoen Shelter', x: 250, y: 490, desc: 'Massive open park refuge. Capacity: 25,000. Windbreak forest.' },
-    { id: 'shinjuku-water', category: 'water', name: 'Gyoen Water Station', x: 300, y: 310, desc: 'Clean groundwater well with manual pumps.' },
-    { id: 'shinjuku-medical', category: 'medical', name: 'Shinjuku First Aid Tent', x: 110, y: 420, desc: 'Red Cross outpost. Medical supplies stocked.' },
-    { id: 'shinjuku-hazard', category: 'hazard', name: 'Subway Flooding', x: 190, y: 200, desc: 'Underground tunnel ingress. Closed.' }
+    { id: 'shinjuku-shelter', category: 'shelter', name: 'Shinjuku Gyoen Shelter', x: 250, y: 490, lat: 35.6852, lng: 139.7095, desc: 'Massive open park refuge. Capacity: 25,000. Windbreak forest.' },
+    { id: 'shinjuku-water', category: 'water', name: 'Gyoen Water Station', x: 300, y: 310, lat: 35.6880, lng: 139.7130, desc: 'Clean groundwater well with manual pumps.' },
+    { id: 'shinjuku-medical', category: 'medical', name: 'Shinjuku First Aid Tent', x: 110, y: 420, lat: 35.6895, lng: 139.6990, desc: 'Red Cross outpost. Medical supplies stocked.' },
+    { id: 'shinjuku-hazard', category: 'hazard', name: 'Subway Flooding', x: 190, y: 200, lat: 35.6905, lng: 139.7040, desc: 'Underground tunnel ingress. Closed.' }
   ]
 };
 
@@ -160,6 +160,212 @@ export default function App() {
   const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
   const [voiceAssistant, setVoiceAssistant] = useState(false);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
+
+  // Real Google Maps API Integration States & Refs
+  const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const googleMarkersRef = useRef<any[]>([]);
+  const routePolylineRef = useRef<any>(null);
+  const trafficLayerRef = useRef<any>(null);
+
+  // Dynamic Google Maps Script Loader
+  useEffect(() => {
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+    if (!apiKey) {
+      console.warn("VITE_GOOGLE_MAPS_API_KEY is not defined. Falling back to high-fidelity SVG interactive map mockup.");
+      return;
+    }
+
+    if (typeof google !== 'undefined' && google.maps) {
+      setGoogleMapsLoaded(true);
+      return;
+    }
+
+    const existingScript = document.getElementById('google-maps-api-script');
+    if (existingScript) {
+      const handleLoad = () => setGoogleMapsLoaded(true);
+      existingScript.addEventListener('load', handleLoad);
+      return () => {
+        existingScript.removeEventListener('load', handleLoad);
+      };
+    }
+
+    const script = document.createElement('script');
+    script.id = 'google-maps-api-script';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
+    script.async = true;
+    script.defer = true;
+    script.addEventListener('load', () => {
+      setGoogleMapsLoaded(true);
+      console.log("Real Google Maps API successfully loaded.");
+    });
+    script.addEventListener('error', (e) => {
+      console.error("Failed to load Google Maps API script.", e);
+    });
+    document.head.appendChild(script);
+  }, []);
+
+  // Update real Google Map instance, center, markers, layers, and routes dynamically
+  useEffect(() => {
+    if (!googleMapsLoaded || !mapRef.current || typeof google === 'undefined' || !google.maps) return;
+
+    const centers = {
+      Shibuya: { lat: 35.658034, lng: 139.701630 },
+      Minato: { lat: 35.658581, lng: 139.745433 },
+      Shinjuku: { lat: 35.6895, lng: 139.6917 }
+    };
+    const center = centers[personalContext.location] || centers.Shibuya;
+
+    // 1. Initialize Map if not already created
+    if (!mapInstanceRef.current) {
+      mapInstanceRef.current = new google.maps.Map(mapRef.current, {
+        center: center,
+        zoom: 15,
+        disableDefaultUI: true,
+        zoomControl: false,
+        gestureHandling: "cooperative",
+        styles: [
+          { elementType: "geometry", stylers: [{ color: "#0d1117" }] },
+          { elementType: "labels.text.stroke", stylers: [{ color: "#0d1117" }] },
+          { elementType: "labels.text.fill", stylers: [{ color: "#58a6ff" }] },
+          { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#30363d" }] },
+          { featureType: "road", elementType: "geometry", stylers: [{ color: "#21262d" }] },
+          { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#30363d" }] },
+          { featureType: "water", elementType: "geometry", stylers: [{ color: "#090d16" }] }
+        ]
+      });
+    } else {
+      mapInstanceRef.current.setCenter(center);
+    }
+
+    // 2. Clear existing Google Map markers
+    googleMarkersRef.current.forEach(m => m.setMap(null));
+    googleMarkersRef.current = [];
+
+    // 3. Create current category & search-filtered markers
+    const currentMarkers = (locationMarkers[personalContext.location] || []).filter((m: any) => {
+      const matchesCategory = filterCategory === 'all' || m.category === filterCategory;
+      const matchesSearch = searchQuery === '' || 
+        m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        m.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.category.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+
+    currentMarkers.forEach((markerData: any) => {
+      const color = {
+        shelter: '#10b981',
+        water: '#0ea5e9',
+        medical: '#a855f7',
+        hazard: '#ef4444'
+      }[markerData.category as 'shelter' | 'water' | 'medical' | 'hazard'] || '#38bdf8';
+
+      // SVG path custom pin symbol for Google Maps
+      const pinSymbol = {
+        path: 'M 0 8 C -5 2, -7.5 -3, -7.5 -9 C -7.5 -16, -4 -20, 0 -20 C 4 -20, 7.5 -16, 7.5 -9 C 7.5 -3, 5 2, 0 8 Z',
+        fillColor: color,
+        fillOpacity: 1,
+        strokeColor: '#0d1117',
+        strokeWeight: 1.5,
+        scale: 1.2,
+        anchor: new google.maps.Point(0, 8),
+      };
+
+      const marker = new google.maps.Marker({
+        position: { lat: markerData.lat, lng: markerData.lng },
+        map: mapInstanceRef.current,
+        icon: pinSymbol,
+        title: markerData.name
+      });
+
+      marker.addListener('click', () => {
+        setActiveMarker(markerData.id);
+      });
+
+      googleMarkersRef.current.push(marker);
+    });
+
+    // 4. Place current user position pin (Blue pulsing core dot)
+    const userPositions = {
+      Shibuya: { lat: 35.6565, lng: 139.7000 },
+      Minato: { lat: 35.6595, lng: 139.7390 },
+      Shinjuku: { lat: 35.6882, lng: 139.7015 }
+    };
+    const userPos = userPositions[personalContext.location];
+    if (userPos) {
+      const userMarker = new google.maps.Marker({
+        position: userPos,
+        map: mapInstanceRef.current,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 6,
+          fillColor: '#2563eb',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 1.5
+        },
+        title: "Your Position"
+      });
+      googleMarkersRef.current.push(userMarker);
+    }
+
+    // 5. Render live real-time Traffic layer if traffic view is requested
+    if (trafficLayerRef.current) {
+      trafficLayerRef.current.setMap(null);
+      trafficLayerRef.current = null;
+    }
+    if (mapLayer === 'traffic') {
+      trafficLayerRef.current = new google.maps.TrafficLayer();
+      trafficLayerRef.current.setMap(mapInstanceRef.current);
+    }
+
+    // 6. Set Map Type (satellite vs roadmap)
+    if (mapLayer === 'satellite') {
+      mapInstanceRef.current.setMapTypeId('satellite');
+    } else {
+      mapInstanceRef.current.setMapTypeId('roadmap');
+    }
+
+    // 7. Render dynamic Evacuation Polyline if active alert simulation is running
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null);
+      routePolylineRef.current = null;
+    }
+
+    if (currentStep >= 0) {
+      const shelterData = (locationMarkers[personalContext.location] || []).find((m: any) => m.category === 'shelter');
+      if (shelterData && userPos) {
+        let pathCoords = [userPos];
+        if (personalContext.location === 'Shibuya') {
+          pathCoords.push({ lat: 35.6580, lng: 139.7000 });
+          pathCoords.push({ lat: 35.6600, lng: 139.7020 });
+        } else if (personalContext.location === 'Minato') {
+          pathCoords.push({ lat: 35.6575, lng: 139.7420 });
+          pathCoords.push({ lat: 35.6565, lng: 139.7450 });
+        } else if (personalContext.location === 'Shinjuku') {
+          pathCoords.push({ lat: 35.6865, lng: 139.7050 });
+          pathCoords.push({ lat: 35.6852, lng: 139.7080 });
+        }
+        pathCoords.push({ lat: shelterData.lat, lng: shelterData.lng });
+
+        routePolylineRef.current = new google.maps.Polyline({
+          path: pathCoords,
+          geodesic: true,
+          strokeColor: '#10b981',
+          strokeOpacity: 0.85,
+          strokeWeight: 5,
+          map: mapInstanceRef.current
+        });
+
+        // Fit bounds to fit the route on screen smoothly
+        const bounds = new google.maps.LatLngBounds();
+        pathCoords.forEach(coord => bounds.extend(coord));
+        mapInstanceRef.current.fitBounds(bounds);
+      }
+    }
+
+  }, [googleMapsLoaded, personalContext.location, filterCategory, searchQuery, activeMarker, mapLayer, currentStep]);
 
   // Handle Credential Response from Google Sign-In
   const handleCredentialResponse = (response: any) => {
@@ -605,255 +811,260 @@ export default function App() {
               }
             `}} />
 
-            {/* FULL-BLEED INTERACTIVE SVG MAP */}
-            {(() => {
-              // Extract current markers based on category filter and search query
-              const currentMarkers = (locationMarkers[personalContext.location] || []).filter((m: any) => {
-                const matchesCategory = filterCategory === 'all' || m.category === filterCategory;
-                const matchesSearch = searchQuery === '' || 
-                  m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                  m.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  m.category.toLowerCase().includes(searchQuery.toLowerCase());
-                return matchesCategory && matchesSearch;
-              });
+            {/* REAL GOOGLE MAPS DIV WITH SVG FALLBACK */}
+            {googleMapsLoaded ? (
+              <div ref={mapRef} className="absolute inset-0 w-full h-full z-0 overflow-hidden" />
+            ) : (
+              /* SVG Fallback Map (Offline and No-Key resilience) */
+              (() => {
+                // Extract current markers based on category filter and search query
+                const currentMarkers = (locationMarkers[personalContext.location] || []).filter((m: any) => {
+                  const matchesCategory = filterCategory === 'all' || m.category === filterCategory;
+                  const matchesSearch = searchQuery === '' || 
+                    m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    m.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    m.category.toLowerCase().includes(searchQuery.toLowerCase());
+                  return matchesCategory && matchesSearch;
+                });
 
-              // Coordinates and Routes config
-              const mapConfig = {
-                Shibuya: {
-                  user: { x: 180, y: 490 },
-                  shelter: { x: 252, y: 345 },
-                  route: "M 180 490 L 180 420 L 252 420 L 252 345"
-                },
-                Minato: {
-                  user: { x: 120, y: 480 },
-                  shelter: { x: 210, y: 390 },
-                  route: "M 120 480 L 195 480 L 195 390 L 210 390"
-                },
-                Shinjuku: {
-                  user: { x: 190, y: 340 },
-                  shelter: { x: 250, y: 490 },
-                  route: "M 190 340 L 190 480 L 250 480 L 250 490"
-                }
-              }[personalContext.location];
+                // Coordinates and Routes config
+                const mapConfig = {
+                  Shibuya: {
+                    user: { x: 180, y: 490 },
+                    shelter: { x: 252, y: 345 },
+                    route: "M 180 490 L 180 420 L 252 420 L 252 345"
+                  },
+                  Minato: {
+                    user: { x: 120, y: 480 },
+                    shelter: { x: 210, y: 390 },
+                    route: "M 120 480 L 195 480 L 195 390 L 210 390"
+                  },
+                  Shinjuku: {
+                    user: { x: 190, y: 340 },
+                    shelter: { x: 250, y: 490 },
+                    route: "M 190 340 L 190 480 L 250 480 L 250 490"
+                  }
+                }[personalContext.location];
 
-              return (
-                <div className="absolute inset-0 w-full h-full bg-[#0d1117] z-0 overflow-hidden select-none">
-                  {/* Outer Map SVG wrapper */}
-                  <svg className="absolute inset-0 w-full h-full" viewBox="0 0 390 844" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    
-                    {/* SATELLITE GRID OVERLAY */}
-                    {mapLayer === 'satellite' && (
-                      <g opacity="0.15">
-                        <defs>
-                          <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
-                            <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#0ea5e9" strokeWidth="0.5" />
-                          </pattern>
-                        </defs>
-                        <rect width="100%" height="100%" fill="url(#grid)" />
-                      </g>
-                    )}
-
-                    {/* DYNAMIC LANDMARKS & PARKS */}
-                    {personalContext.location === 'Shibuya' && (
-                      <>
-                        {/* Yoyogi Park */}
-                        <path d="M 15 40 C 80 20, 160 50, 140 180 C 130 240, 60 260, 15 180 Z" fill={mapLayer === 'satellite' ? '#022c22' : '#064e3b'} fillOpacity={mapLayer === 'satellite' ? '0.7' : '0.8'} stroke="#10b981" strokeWidth="0.5" />
-                        <text x="55" y="140" fill="#10b981" fontSize="9" fontWeight="bold" className="font-sans tracking-wide" opacity="0.6">Yoyogi Park</text>
-                        
-                        {/* Miyashita Park */}
-                        <rect x="235" y="260" width="25" height="130" rx="4" fill={mapLayer === 'satellite' ? '#042f2e' : '#0f766e'} fillOpacity="0.8" stroke="#14b8a6" strokeWidth="0.5" />
-                        <text x="248" y="325" fill="#14b8a6" fontSize="7" fontWeight="bold" writingMode="tb" className="font-sans" opacity="0.8">Miyashita Park</text>
-
-                        {/* Shibuya Crossing Visual */}
-                        <g opacity="0.2">
-                          <rect x="170" y="410" width="20" height="20" fill="#334155" />
-                          <path d="M 172 410 L 172 430 M 176 410 L 176 430 M 180 410 L 180 430 M 184 410 L 184 430 M 188 410 L 188 430" stroke="white" strokeWidth="1" />
+                return (
+                  <div className="absolute inset-0 w-full h-full bg-[#0d1117] z-0 overflow-hidden select-none">
+                    {/* Outer Map SVG wrapper */}
+                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 390 844" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      
+                      {/* SATELLITE GRID OVERLAY */}
+                      {mapLayer === 'satellite' && (
+                        <g opacity="0.15">
+                          <defs>
+                            <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+                              <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#0ea5e9" strokeWidth="0.5" />
+                            </pattern>
+                          </defs>
+                          <rect width="100%" height="100%" fill="url(#grid)" />
                         </g>
-                        <text x="140" y="445" fill="#94a3b8" fontSize="8" className="font-sans font-medium" opacity="0.4">Shibuya Crossing</text>
-                      </>
-                    )}
+                      )}
 
-                    {personalContext.location === 'Minato' && (
-                      <>
-                        {/* Shiba Park */}
-                        <rect x="150" y="320" width="140" height="140" rx="10" fill={mapLayer === 'satellite' ? '#022c22' : '#064e3b'} fillOpacity="0.8" stroke="#10b981" strokeWidth="0.5" />
-                        <text x="175" y="360" fill="#10b981" fontSize="9" fontWeight="bold" className="font-sans tracking-wide" opacity="0.6">Shiba Park</text>
-
-                        {/* Tokyo Tower Truss Symbol */}
-                        <g transform="translate(235, 415)" opacity="0.8">
-                          <line x1="0" y1="15" x2="0" y2="-20" stroke="#ef4444" strokeWidth="1.5" />
-                          <line x1="-10" y1="15" x2="0" y2="-10" stroke="#ef4444" strokeWidth="1.5" />
-                          <line x1="10" y1="15" x2="0" y2="-10" stroke="#ef4444" strokeWidth="1.5" />
-                          <line x1="-6" y1="0" x2="6" y2="0" stroke="#ef4444" strokeWidth="1" />
-                          <line x1="-4" y1="-10" x2="4" y2="-10" stroke="#ef4444" strokeWidth="1" />
-                          <circle cx="0" cy="-21" r="2" fill="#ef4444" className="animate-pulse" />
-                        </g>
-                        <text x="210" y="445" fill="#ef4444" fontSize="8" fontWeight="bold" className="font-sans" opacity="0.7">Tokyo Tower</text>
-                      </>
-                    )}
-
-                    {personalContext.location === 'Shinjuku' && (
-                      <>
-                        {/* Shinjuku Gyoen */}
-                        <rect x="140" y="380" width="220" height="230" rx="16" fill={mapLayer === 'satellite' ? '#022c22' : '#064e3b'} fillOpacity="0.8" stroke="#10b981" strokeWidth="0.5" />
-                        <text x="210" y="440" fill="#10b981" fontSize="10" fontWeight="bold" className="font-sans tracking-wide" opacity="0.6">Shinjuku Gyoen</text>
-
-                        {/* Gov Building Outline */}
-                        <g transform="translate(60, 260)" opacity="0.6" stroke="#38bdf8" strokeWidth="1" fill="none">
-                          <rect x="0" y="10" width="12" height="60" rx="1" />
-                          <rect x="18" y="10" width="12" height="60" rx="1" />
-                          <rect x="0" y="40" width="30" height="30" />
-                          <path d="M 6 10 L 6 0 M 24 10 L 24 0" />
-                        </g>
-                        <text x="45" y="340" fill="#38bdf8" fontSize="8" className="font-sans" opacity="0.5">TMG Building</text>
-                      </>
-                    )}
-
-                    {/* ROAD NETWORKS LAYER */}
-                    <g opacity={mapLayer === 'satellite' ? '0.3' : '0.5'}>
+                      {/* DYNAMIC LANDMARKS & PARKS */}
                       {personalContext.location === 'Shibuya' && (
                         <>
-                          {/* Meiji-dori */}
-                          <path d="M 180 40 L 180 800" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth={mapLayer === 'traffic' ? '5' : '4'} strokeLinecap="round" />
-                          {/* Yamate-dori */}
-                          <path d="M 80 40 L 80 800" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="3" strokeLinecap="round" />
-                          {/* Route 246 */}
-                          <path d="M 15 420 L 375 420" stroke={mapLayer === 'traffic' ? '#ef4444' : '#475569'} strokeWidth={mapLayer === 'traffic' ? '6' : '5'} strokeLinecap="round" />
-                          {/* Miyashita Crossing road connection */}
-                          <path d="M 15 280 L 375 580" stroke={mapLayer === 'traffic' ? '#f59e0b' : '#334155'} strokeWidth="3" strokeLinecap="round" />
+                          {/* Yoyogi Park */}
+                          <path d="M 15 40 C 80 20, 160 50, 140 180 C 130 240, 60 260, 15 180 Z" fill={mapLayer === 'satellite' ? '#022c22' : '#064e3b'} fillOpacity={mapLayer === 'satellite' ? '0.7' : '0.8'} stroke="#10b981" strokeWidth="0.5" />
+                          <text x="55" y="140" fill="#10b981" fontSize="9" fontWeight="bold" className="font-sans tracking-wide" opacity="0.6">Yoyogi Park</text>
+                          
+                          {/* Miyashita Park */}
+                          <rect x="235" y="260" width="25" height="130" rx="4" fill={mapLayer === 'satellite' ? '#042f2e' : '#0f766e'} fillOpacity="0.8" stroke="#14b8a6" strokeWidth="0.5" />
+                          <text x="248" y="325" fill="#14b8a6" fontSize="7" fontWeight="bold" writingMode="tb" className="font-sans" opacity="0.8">Miyashita Park</text>
+
+                          {/* Shibuya Crossing Visual */}
+                          <g opacity="0.2">
+                            <rect x="170" y="410" width="20" height="20" fill="#334155" />
+                            <path d="M 172 410 L 172 430 M 176 410 L 176 430 M 180 410 L 180 430 M 184 410 L 184 430 M 188 410 L 188 430" stroke="white" strokeWidth="1" />
+                          </g>
+                          <text x="140" y="445" fill="#94a3b8" fontSize="8" className="font-sans font-medium" opacity="0.4">Shibuya Crossing</text>
                         </>
                       )}
 
                       {personalContext.location === 'Minato' && (
                         <>
-                          <path d="M 50 150 L 340 650" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth="4" strokeLinecap="round" />
-                          <path d="M 50 650 L 340 150" stroke={mapLayer === 'traffic' ? '#f59e0b' : '#475569'} strokeWidth="4" strokeLinecap="round" />
-                          <path d="M 195 50 L 195 780" stroke={mapLayer === 'traffic' ? '#ef4444' : '#334155'} strokeWidth="3" strokeLinecap="round" />
-                          <path d="M 50 400 L 350 400" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="3" strokeLinecap="round" />
+                          {/* Shiba Park */}
+                          <rect x="150" y="320" width="140" height="140" rx="10" fill={mapLayer === 'satellite' ? '#022c22' : '#064e3b'} fillOpacity="0.8" stroke="#10b981" strokeWidth="0.5" />
+                          <text x="175" y="360" fill="#10b981" fontSize="9" fontWeight="bold" className="font-sans tracking-wide" opacity="0.6">Shiba Park</text>
+
+                          {/* Tokyo Tower Truss Symbol */}
+                          <g transform="translate(235, 415)" opacity="0.8">
+                            <line x1="0" y1="15" x2="0" y2="-20" stroke="#ef4444" strokeWidth="1.5" />
+                            <line x1="-10" y1="15" x2="0" y2="-10" stroke="#ef4444" strokeWidth="1.5" />
+                            <line x1="10" y1="15" x2="0" y2="-10" stroke="#ef4444" strokeWidth="1.5" />
+                            <line x1="-6" y1="0" x2="6" y2="0" stroke="#ef4444" strokeWidth="1" />
+                            <line x1="-4" y1="-10" x2="4" y2="-10" stroke="#ef4444" strokeWidth="1" />
+                            <circle cx="0" cy="-21" r="2" fill="#ef4444" className="animate-pulse" />
+                          </g>
+                          <text x="210" y="445" fill="#ef4444" fontSize="8" fontWeight="bold" className="font-sans" opacity="0.7">Tokyo Tower</text>
                         </>
                       )}
 
                       {personalContext.location === 'Shinjuku' && (
                         <>
-                          {/* Grids */}
-                          <line x1="90" y1="50" x2="90" y2="780" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth="3" />
-                          <line x1="190" y1="50" x2="190" y2="780" stroke={mapLayer === 'traffic' ? '#ef4444' : '#475569'} strokeWidth="4" />
-                          <line x1="290" y1="50" x2="290" y2="780" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="3" />
-                          <line x1="15" y1="200" x2="375" y2="200" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth="4" />
-                          <line x1="15" y1="340" x2="375" y2="340" stroke={mapLayer === 'traffic' ? '#f59e0b' : '#475569'} strokeWidth="3" />
-                          <line x1="15" y1="480" x2="375" y2="480" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="4" />
-                          <line x1="15" y1="620" x2="375" y2="620" stroke={mapLayer === 'traffic' ? '#334155' : '#1e293b'} strokeWidth="3" />
+                          {/* Shinjuku Gyoen */}
+                          <rect x="140" y="380" width="220" height="230" rx="16" fill={mapLayer === 'satellite' ? '#022c22' : '#064e3b'} fillOpacity="0.8" stroke="#10b981" strokeWidth="0.5" />
+                          <text x="210" y="440" fill="#10b981" fontSize="10" fontWeight="bold" className="font-sans tracking-wide" opacity="0.6">Shinjuku Gyoen</text>
+
+                          {/* Gov Building Outline */}
+                          <g transform="translate(60, 260)" opacity="0.6" stroke="#38bdf8" strokeWidth="1" fill="none">
+                            <rect x="0" y="10" width="12" height="60" rx="1" />
+                            <rect x="18" y="10" width="12" height="60" rx="1" />
+                            <rect x="0" y="40" width="30" height="30" />
+                            <path d="M 6 10 L 6 0 M 24 10 L 24 0" />
+                          </g>
+                          <text x="45" y="340" fill="#38bdf8" fontSize="8" className="font-sans" opacity="0.5">TMG Building</text>
                         </>
                       )}
-                    </g>
 
-                    {/* DYNAMIC GLOWING HAZARD ZONES (If Hazard layer or Alert is active) */}
-                    {(mapLayer === 'hazard' || currentStep >= 0) && (
-                      <g>
-                        {/* Red warning radial gradients around hazards */}
+                      {/* ROAD NETWORKS LAYER */}
+                      <g opacity={mapLayer === 'satellite' ? '0.3' : '0.5'}>
                         {personalContext.location === 'Shibuya' && (
-                          <circle cx="100" cy="450" r="45" fill="url(#hazardGrad)" className="animate-pulse" opacity="0.35" />
+                          <>
+                            {/* Meiji-dori */}
+                            <path d="M 180 40 L 180 800" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth={mapLayer === 'traffic' ? '5' : '4'} strokeLinecap="round" />
+                            {/* Yamate-dori */}
+                            <path d="M 80 40 L 80 800" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="3" strokeLinecap="round" />
+                            {/* Route 246 */}
+                            <path d="M 15 420 L 375 420" stroke={mapLayer === 'traffic' ? '#ef4444' : '#475569'} strokeWidth={mapLayer === 'traffic' ? '6' : '5'} strokeLinecap="round" />
+                            {/* Miyashita Crossing road connection */}
+                            <path d="M 15 280 L 375 580" stroke={mapLayer === 'traffic' ? '#f59e0b' : '#334155'} strokeWidth="3" strokeLinecap="round" />
+                          </>
                         )}
+
                         {personalContext.location === 'Minato' && (
-                          <circle cx="150" cy="580" r="50" fill="url(#hazardGrad)" className="animate-pulse" opacity="0.35" />
+                          <>
+                            <path d="M 50 150 L 340 650" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth="4" strokeLinecap="round" />
+                            <path d="M 50 650 L 340 150" stroke={mapLayer === 'traffic' ? '#f59e0b' : '#475569'} strokeWidth="4" strokeLinecap="round" />
+                            <path d="M 195 50 L 195 780" stroke={mapLayer === 'traffic' ? '#ef4444' : '#334155'} strokeWidth="3" strokeLinecap="round" />
+                            <path d="M 50 400 L 350 400" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="3" strokeLinecap="round" />
+                          </>
                         )}
+
                         {personalContext.location === 'Shinjuku' && (
-                          <circle cx="190" cy="200" r="45" fill="url(#hazardGrad)" className="animate-pulse" opacity="0.35" />
+                          <>
+                            {/* Grids */}
+                            <line x1="90" y1="50" x2="90" y2="780" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth="3" />
+                            <line x1="190" y1="50" x2="190" y2="780" stroke={mapLayer === 'traffic' ? '#ef4444' : '#475569'} strokeWidth="4" />
+                            <line x1="290" y1="50" x2="290" y2="780" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="3" />
+                            <line x1="15" y1="200" x2="375" y2="200" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth="4" />
+                            <line x1="15" y1="340" x2="375" y2="340" stroke={mapLayer === 'traffic' ? '#f59e0b' : '#475569'} strokeWidth="3" />
+                            <line x1="15" y1="480" x2="375" y2="480" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="4" />
+                            <line x1="15" y1="620" x2="375" y2="620" stroke={mapLayer === 'traffic' ? '#334155' : '#1e293b'} strokeWidth="3" />
+                          </>
                         )}
-                        <defs>
-                          <radialGradient id="hazardGrad">
-                            <stop offset="0%" stopColor="#ef4444" stopOpacity="0.4" />
-                            <stop offset="70%" stopColor="#ef4444" stopOpacity="0.1" />
-                            <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
-                          </radialGradient>
-                        </defs>
                       </g>
-                    )}
 
-                    {/* ANIMATED CO-PILOT SAFE EVACUATION ROUTE PATH */}
-                    {currentStep >= 0 && mapConfig && (
-                      <g>
-                        {/* Route Shadow glow */}
-                        <path
-                          d={mapConfig.route}
-                          fill="none"
-                          stroke="#10b981"
-                          strokeWidth="7"
-                          strokeLinecap="round"
-                          opacity="0.3"
-                          style={{ filter: 'blur(3px)' }}
-                        />
-                        {/* Active animated dashed line */}
-                        <path
-                          d={mapConfig.route}
-                          fill="none"
-                          stroke="#10b981"
-                          strokeWidth="4.5"
-                          strokeLinecap="round"
-                          strokeDasharray="9 7"
-                          className="line-dash"
-                          style={{
-                            filter: 'drop-shadow(0 0 6px rgba(16, 185, 129, 0.8))'
-                          }}
-                        />
-                      </g>
-                    )}
-
-                    {/* DYNAMIC MARKERS (SHELTERS, WATER, CLINICS, DANGER) */}
-                    {currentMarkers.map((marker: any) => {
-                      const color = {
-                        shelter: '#10b981', // green
-                        water: '#0ea5e9',   // blue
-                        medical: '#a855f7', // purple
-                        hazard: '#ef4444'   // red
-                      }[marker.category as 'shelter' | 'water' | 'medical' | 'hazard'] || '#38bdf8';
-
-                      const isSelected = activeMarker === marker.id;
-
-                      return (
-                        <g 
-                          key={marker.id} 
-                          transform={`translate(${marker.x}, ${marker.y})`} 
-                          className="cursor-pointer group"
-                          onClick={() => setActiveMarker(marker.id)}
-                        >
-                          {/* Outer pulse indicator */}
-                          <circle r="12" fill="none" stroke={color} strokeWidth="1.5" className="radar-pulse" />
-                          {/* Inner pin shadow */}
-                          <ellipse cx="0" cy="8" rx="4" ry="1.5" fill="#000000" opacity="0.3" />
-                          
-                          {/* Pin body shape */}
-                          <path 
-                            d="M 0 8 C -5 2, -7.5 -3, -7.5 -9 C -7.5 -16, -4 -20, 0 -20 C 4 -20, 7.5 -16, 7.5 -9 C 7.5 -3, 5 2, 0 8 Z" 
-                            fill={color} 
-                            stroke="#0d1117" 
-                            strokeWidth="1.2"
-                            className={`transition-all duration-300 ${isSelected ? 'scale-125 -translate-y-1' : 'group-hover:scale-110 group-hover:-translate-y-0.5'}`}
-                          />
-                          {/* Pin white center core */}
-                          <circle cx="0" cy="-9" r="3.2" fill="#ffffff" />
-                          {/* Small icon mapping core dots */}
-                          <circle cx="0" cy="-9" r="1.5" fill={color} />
+                      {/* DYNAMIC GLOWING HAZARD ZONES (If Hazard layer or Alert is active) */}
+                      {(mapLayer === 'hazard' || currentStep >= 0) && (
+                        <g>
+                          {/* Red warning radial gradients around hazards */}
+                          {personalContext.location === 'Shibuya' && (
+                            <circle cx="100" cy="450" r="45" fill="url(#hazardGrad)" className="animate-pulse" opacity="0.35" />
+                          )}
+                          {personalContext.location === 'Minato' && (
+                            <circle cx="150" cy="580" r="50" fill="url(#hazardGrad)" className="animate-pulse" opacity="0.35" />
+                          )}
+                          {personalContext.location === 'Shinjuku' && (
+                            <circle cx="190" cy="200" r="45" fill="url(#hazardGrad)" className="animate-pulse" opacity="0.35" />
+                          )}
+                          <defs>
+                            <radialGradient id="hazardGrad">
+                              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.4" />
+                              <stop offset="70%" stopColor="#ef4444" stopOpacity="0.1" />
+                              <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+                            </radialGradient>
+                          </defs>
                         </g>
-                      );
-                    })}
+                      )}
 
-                    {/* CURRENT USER POSITION (Blue pulsing dot) */}
-                    {mapConfig && (
-                      <g transform={`translate(${mapConfig.user.x}, ${mapConfig.user.y})`}>
-                        {/* Radar Ripple waves */}
-                        <circle cx="0" cy="0" r="12" fill="none" stroke="#2563eb" strokeWidth="1.5" className="radar-pulse" />
-                        <circle cx="0" cy="0" r="24" fill="none" stroke="#2563eb" strokeWidth="1" className="radar-pulse" style={{ animationDelay: '0.6s' }} />
-                        {/* Blue glow core */}
-                        <circle cx="0" cy="0" r="8" fill="#3b82f6" fillOpacity="0.3" />
-                        {/* Base Core Dot */}
-                        <circle cx="0" cy="0" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="1.5" style={{ filter: 'drop-shadow(0 0 4px rgba(37, 99, 235, 0.6))' }} />
-                      </g>
-                    )}
-                  </svg>
-                </div>
-              );
-            })()}
+                      {/* ANIMATED CO-PILOT SAFE EVACUATION ROUTE PATH */}
+                      {currentStep >= 0 && mapConfig && (
+                        <g>
+                          {/* Route Shadow glow */}
+                          <path
+                            d={mapConfig.route}
+                            fill="none"
+                            stroke="#10b981"
+                            strokeWidth="7"
+                            strokeLinecap="round"
+                            opacity="0.3"
+                            style={{ filter: 'blur(3px)' }}
+                          />
+                          {/* Active animated dashed line */}
+                          <path
+                            d={mapConfig.route}
+                            fill="none"
+                            stroke="#10b981"
+                            strokeWidth="4.5"
+                            strokeLinecap="round"
+                            strokeDasharray="9 7"
+                            className="line-dash"
+                            style={{
+                              filter: 'drop-shadow(0 0 6px rgba(16, 185, 129, 0.8))'
+                            }}
+                          />
+                        </g>
+                      )}
+
+                      {/* DYNAMIC MARKERS (SHELTERS, WATER, CLINICS, DANGER) */}
+                      {currentMarkers.map((marker: any) => {
+                        const color = {
+                          shelter: '#10b981', // green
+                          water: '#0ea5e9',   // blue
+                          medical: '#a855f7', // purple
+                          hazard: '#ef4444'   // red
+                        }[marker.category as 'shelter' | 'water' | 'medical' | 'hazard'] || '#38bdf8';
+
+                        const isSelected = activeMarker === marker.id;
+
+                        return (
+                          <g 
+                            key={marker.id} 
+                            transform={`translate(${marker.x}, ${marker.y})`} 
+                            className="cursor-pointer group"
+                            onClick={() => setActiveMarker(marker.id)}
+                          >
+                            {/* Outer pulse indicator */}
+                            <circle r="12" fill="none" stroke={color} strokeWidth="1.5" className="radar-pulse" />
+                            {/* Inner pin shadow */}
+                            <ellipse cx="0" cy="8" rx="4" ry="1.5" fill="#000000" opacity="0.3" />
+                            
+                            {/* Pin body shape */}
+                            <path 
+                              d="M 0 8 C -5 2, -7.5 -3, -7.5 -9 C -7.5 -16, -4 -20, 0 -20 C 4 -20, 7.5 -16, 7.5 -9 C 7.5 -3, 5 2, 0 8 Z" 
+                              fill={color} 
+                              stroke="#0d1117" 
+                              strokeWidth="1.2"
+                              className={`transition-all duration-300 ${isSelected ? 'scale-125 -translate-y-1' : 'group-hover:scale-110 group-hover:-translate-y-0.5'}`}
+                            />
+                            {/* Pin white center core */}
+                            <circle cx="0" cy="-9" r="3.2" fill="#ffffff" />
+                            {/* Small icon mapping core dots */}
+                            <circle cx="0" cy="-9" r="1.5" fill={color} />
+                          </g>
+                        );
+                      })}
+
+                      {/* CURRENT USER POSITION (Blue pulsing dot) */}
+                      {mapConfig && (
+                        <g transform={`translate(${mapConfig.user.x}, ${mapConfig.user.y})`}>
+                          {/* Radar Ripple waves */}
+                          <circle cx="0" cy="0" r="12" fill="none" stroke="#2563eb" strokeWidth="1.5" className="radar-pulse" />
+                          <circle cx="0" cy="0" r="24" fill="none" stroke="#2563eb" strokeWidth="1" className="radar-pulse" style={{ animationDelay: '0.6s' }} />
+                          {/* Blue glow core */}
+                          <circle cx="0" cy="0" r="8" fill="#3b82f6" fillOpacity="0.3" />
+                          {/* Base Core Dot */}
+                          <circle cx="0" cy="0" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="1.5" style={{ filter: 'drop-shadow(0 0 4px rgba(37, 99, 235, 0.6))' }} />
+                        </g>
+                      )}
+                    </svg>
+                  </div>
+                );
+              })()
+            )}
 
             {/* FLOATING TOP GOOGLE MAPS SEARCH BAR */}
             <div className="absolute top-12 left-4 right-4 z-30 flex flex-col gap-2.5">
