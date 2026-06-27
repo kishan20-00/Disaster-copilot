@@ -82,11 +82,12 @@ export async function runSituationAgent(input: {
   );
 }
 
-export async function runPersonalAgent(profile: PersonalProfile): Promise<string> {
+export async function runPersonalAgent(profile: PersonalProfile, address?: string | null): Promise<string> {
+  const locLine = address ? `Current GPS-resolved address: "${address}".` : `Approximate location: ${profile.location}.`;
   return generateText(
-    `You are the PERSONAL CONTEXT AGENT. In ONE English sentence (max 30 words) describe the user's vulnerability profile ` +
-    `and the dominant constraint that will shape evacuation advice. ` +
-    `Profile: language=${profile.language}, location=${profile.location}, floor=${profile.floor}, ` +
+    `You are the PERSONAL CONTEXT AGENT. In ONE English sentence (max 30 words) state the user's vulnerability profile ` +
+    `and the dominant constraint shaping evacuation advice. Mention the resolved location when present. ` +
+    `${locLine} Profile: language=${profile.language}, floor=${profile.floor}, ` +
     `companions=${profile.companions}, mobility=${profile.mobility}.`
   );
 }
@@ -95,12 +96,18 @@ export async function runRouteAgent(input: {
   profile: PersonalProfile;
   shelterName: string;
   shelterDistance?: string;
+  walkingDistance?: string;
+  walkingDuration?: string;
   hazard: Hazard;
 }): Promise<string> {
+  const realRoute = input.walkingDistance && input.walkingDuration
+    ? ` Real walking route from Google Directions: ${input.walkingDistance}, ETA ${input.walkingDuration}.`
+    : '';
   return generateText(
     `You are the ROUTE & SHELTER AGENT. In ONE English sentence (max 30 words) describe the safest evacuation route ` +
-    `from the user's location to "${input.shelterName}"${input.shelterDistance ? ` (${input.shelterDistance})` : ''} ` +
-    `during a ${input.hazard}, taking into account: floor=${input.profile.floor}, companions=${input.profile.companions}, mobility=${input.profile.mobility}.`
+    `from the user's GPS position to "${input.shelterName}"${input.shelterDistance ? ` (${input.shelterDistance} straight-line)` : ''} ` +
+    `during a ${input.hazard}.${realRoute} Account for: floor=${input.profile.floor}, ` +
+    `companions=${input.profile.companions}, mobility=${input.profile.mobility}.`
   );
 }
 
@@ -144,14 +151,19 @@ export async function generateActionSteps(input: {
   hazard: Hazard;
   shelterName: string;
   shelterDistance?: string;
+  walkingDuration?: string;
+  address?: string | null;
 }): Promise<ActionStep[]> {
-  const { profile, hazard, shelterName, shelterDistance } = input;
+  const { profile, hazard, shelterName, shelterDistance, walkingDuration, address } = input;
+  const locLine = address ? `User GPS address: "${address}".` : `User approximate area: ${profile.location}.`;
+  const etaLine = walkingDuration ? ` Walking ETA to shelter: ${walkingDuration}.` : '';
   const prompt =
     `Generate exactly 3 prioritized evacuation action steps for a civilian facing a ${hazard} in ${profile.location}, Tokyo. ` +
     `Write the title and desc in ${langName(profile.language)}. Use imperative voice. ` +
+    `${locLine}${etaLine} ` +
     `Tailor every step to: floor=${profile.floor}, companions=${profile.companions}, mobility=${profile.mobility}. ` +
     `Step 1 = immediate protective action. Step 2 = secondary safety action (e.g., stairs vs elevator, indoor positioning). ` +
-    `Step 3 = evacuate toward "${shelterName}"${shelterDistance ? ` (${shelterDistance})` : ''}.`;
+    `Step 3 = evacuate toward "${shelterName}"${shelterDistance ? ` (${shelterDistance})` : ''}${walkingDuration ? ` — walking ETA ${walkingDuration}` : ''}.`;
   const result = await generateJson<{ steps: ActionStep[] }>(prompt, actionStepSchema);
   return result.steps;
 }
