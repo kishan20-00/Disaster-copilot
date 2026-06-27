@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Shield,
   Activity,
@@ -15,13 +15,18 @@ import {
   CheckCircle2,
   MessageSquare,
   MapPin,
-  CloudLightning,
-  Waves,
   ArrowRight,
   Unlock,
   LogOut,
   Fingerprint,
-  User
+  User,
+  ChevronUp,
+  ChevronDown,
+  Layers,
+  Navigation,
+  Mic,
+  MicOff,
+  Search
 } from 'lucide-react';
 
 // Global declaration for Google Identity Services script
@@ -83,6 +88,27 @@ const LANGUAGES_MAP = {
   }
 };
 
+const locationMarkers = {
+  Shibuya: [
+    { id: 'shibuya-shelter', category: 'shelter', name: 'Miyashita Park Shelter', x: 252, y: 345, lat: 35.6617, lng: 139.7020, desc: 'Elevated open-air park. Capacity: 5,000. ADA Access verified.' },
+    { id: 'shibuya-water', category: 'water', name: 'Shibuya Well Station', x: 120, y: 320, lat: 35.6585, lng: 139.6975, desc: 'Solar-powered ground aquifer water tap. Active.' },
+    { id: 'shibuya-medical', category: 'medical', name: 'Shibuya Triage Center', x: 280, y: 550, lat: 35.6558, lng: 139.7040, desc: 'First aid, blankets, and local network routing.' },
+    { id: 'shibuya-hazard', category: 'hazard', name: 'Fallen Glass Hazard', x: 100, y: 450, lat: 35.6575, lng: 139.6995, desc: 'Shattered facade glass. Blocked road.' }
+  ],
+  Minato: [
+    { id: 'minato-shelter', category: 'shelter', name: 'Shiba Park Shelter', x: 210, y: 390, lat: 35.6556, lng: 139.7483, desc: 'Large open-ground shelter near Tokyo Tower. Capacity: 8,000.' },
+    { id: 'minato-water', category: 'water', name: 'Tokyo Tower Water Reservoir', x: 100, y: 250, lat: 35.6586, lng: 139.7454, desc: 'Underground emergency fresh-water supply.' },
+    { id: 'minato-medical', category: 'medical', name: 'Roppongi Medical Clinic', x: 290, y: 520, lat: 35.6620, lng: 139.7330, desc: 'Triage team active. Emergency generator operational.' },
+    { id: 'minato-hazard', category: 'hazard', name: 'Structural Risk: Overpass', x: 150, y: 580, lat: 35.6530, lng: 139.7420, desc: 'Highway structural cracks. High risk area.' }
+  ],
+  Shinjuku: [
+    { id: 'shinjuku-shelter', category: 'shelter', name: 'Shinjuku Gyoen Shelter', x: 250, y: 490, lat: 35.6852, lng: 139.7095, desc: 'Massive open park refuge. Capacity: 25,000. Windbreak forest.' },
+    { id: 'shinjuku-water', category: 'water', name: 'Gyoen Water Station', x: 300, y: 310, lat: 35.6880, lng: 139.7130, desc: 'Clean groundwater well with manual pumps.' },
+    { id: 'shinjuku-medical', category: 'medical', name: 'Shinjuku First Aid Tent', x: 110, y: 420, lat: 35.6895, lng: 139.6990, desc: 'Red Cross outpost. Medical supplies stocked.' },
+    { id: 'shinjuku-hazard', category: 'hazard', name: 'Subway Flooding', x: 190, y: 200, lat: 35.6905, lng: 139.7040, desc: 'Underground tunnel ingress. Closed.' }
+  ]
+};
+
 // Helper to parse JWT from Google Identity Services token without external packages
 function parseJwt(token: string) {
   try {
@@ -125,6 +151,228 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState(-1);
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [smsStatus, setSmsStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+
+  // Google Maps styles and interactive state
+  const [mapLayer, setMapLayer] = useState<'streets' | 'satellite' | 'terrain' | 'traffic' | 'hazard'>('streets');
+  const [filterCategory, setFilterCategory] = useState<'all' | 'shelter' | 'water' | 'medical' | 'hazard'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeMarker, setActiveMarker] = useState<string | null>(null);
+  const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
+  const [voiceAssistant, setVoiceAssistant] = useState(false);
+  const [showLayerMenu, setShowLayerMenu] = useState(false);
+
+  // Real Google Maps API Integration States & Refs
+  const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const googleMarkersRef = useRef<any[]>([]);
+  const routePolylineRef = useRef<any>(null);
+  const trafficLayerRef = useRef<any>(null);
+
+  // Dynamic Google Maps Script Loader
+  useEffect(() => {
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+    if (!apiKey) {
+      console.warn("VITE_GOOGLE_MAPS_API_KEY is not defined. Falling back to high-fidelity SVG interactive map mockup.");
+      return;
+    }
+
+    if (typeof google !== 'undefined' && google.maps) {
+      setGoogleMapsLoaded(true);
+      return;
+    }
+
+    const existingScript = document.getElementById('google-maps-api-script');
+    if (existingScript) {
+      const handleLoad = () => setGoogleMapsLoaded(true);
+      existingScript.addEventListener('load', handleLoad);
+      return () => {
+        existingScript.removeEventListener('load', handleLoad);
+      };
+    }
+
+    const script = document.createElement('script');
+    script.id = 'google-maps-api-script';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
+    script.async = true;
+    script.defer = true;
+    script.addEventListener('load', () => {
+      setGoogleMapsLoaded(true);
+      console.log("Real Google Maps API successfully loaded.");
+    });
+    script.addEventListener('error', (e) => {
+      console.error("Failed to load Google Maps API script.", e);
+    });
+    document.head.appendChild(script);
+  }, []);
+
+  // Update real Google Map instance, center, markers, layers, and routes dynamically
+  useEffect(() => {
+    if (!googleMapsLoaded || !mapRef.current || typeof google === 'undefined' || !google.maps) return;
+
+    const centers = {
+      Shibuya: { lat: 35.658034, lng: 139.701630 },
+      Minato: { lat: 35.658581, lng: 139.745433 },
+      Shinjuku: { lat: 35.6895, lng: 139.6917 }
+    };
+    const center = centers[personalContext.location] || centers.Shibuya;
+
+    // 1. Initialize Map if not already created
+    if (!mapInstanceRef.current) {
+      mapInstanceRef.current = new google.maps.Map(mapRef.current, {
+        center: center,
+        zoom: 15,
+        disableDefaultUI: true,
+        zoomControl: false,
+        gestureHandling: "cooperative",
+        styles: [
+          { elementType: "geometry", stylers: [{ color: "#0d1117" }] },
+          { elementType: "labels.text.stroke", stylers: [{ color: "#0d1117" }] },
+          { elementType: "labels.text.fill", stylers: [{ color: "#58a6ff" }] },
+          { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#30363d" }] },
+          { featureType: "road", elementType: "geometry", stylers: [{ color: "#21262d" }] },
+          { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#30363d" }] },
+          { featureType: "water", elementType: "geometry", stylers: [{ color: "#090d16" }] }
+        ]
+      });
+      // Force Google Maps to recalculate container boundaries and center after the DOM paints
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          google.maps.event.trigger(mapInstanceRef.current, 'resize');
+          mapInstanceRef.current.setCenter(center);
+        }
+      }, 150);
+    } else {
+      mapInstanceRef.current.setCenter(center);
+    }
+
+    // 2. Clear existing Google Map markers
+    googleMarkersRef.current.forEach(m => m.setMap(null));
+    googleMarkersRef.current = [];
+
+    // 3. Create current category & search-filtered markers
+    const currentMarkers = (locationMarkers[personalContext.location] || []).filter((m: any) => {
+      const matchesCategory = filterCategory === 'all' || m.category === filterCategory;
+      const matchesSearch = searchQuery === '' || 
+        m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        m.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.category.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+
+    currentMarkers.forEach((markerData: any) => {
+      const color = {
+        shelter: '#10b981',
+        water: '#0ea5e9',
+        medical: '#a855f7',
+        hazard: '#ef4444'
+      }[markerData.category as 'shelter' | 'water' | 'medical' | 'hazard'] || '#38bdf8';
+
+      // SVG path custom pin symbol for Google Maps
+      const pinSymbol = {
+        path: 'M 0 8 C -5 2, -7.5 -3, -7.5 -9 C -7.5 -16, -4 -20, 0 -20 C 4 -20, 7.5 -16, 7.5 -9 C 7.5 -3, 5 2, 0 8 Z',
+        fillColor: color,
+        fillOpacity: 1,
+        strokeColor: '#0d1117',
+        strokeWeight: 1.5,
+        scale: 1.2,
+        anchor: new google.maps.Point(0, 8),
+      };
+
+      const marker = new google.maps.Marker({
+        position: { lat: markerData.lat, lng: markerData.lng },
+        map: mapInstanceRef.current,
+        icon: pinSymbol,
+        title: markerData.name
+      });
+
+      marker.addListener('click', () => {
+        setActiveMarker(markerData.id);
+      });
+
+      googleMarkersRef.current.push(marker);
+    });
+
+    // 4. Place current user position pin (Blue pulsing core dot)
+    const userPositions = {
+      Shibuya: { lat: 35.6565, lng: 139.7000 },
+      Minato: { lat: 35.6595, lng: 139.7390 },
+      Shinjuku: { lat: 35.6882, lng: 139.7015 }
+    };
+    const userPos = userPositions[personalContext.location];
+    if (userPos) {
+      const userMarker = new google.maps.Marker({
+        position: userPos,
+        map: mapInstanceRef.current,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 6,
+          fillColor: '#2563eb',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 1.5
+        },
+        title: "Your Position"
+      });
+      googleMarkersRef.current.push(userMarker);
+    }
+
+    // 5. Render live real-time Traffic layer if traffic view is requested
+    if (trafficLayerRef.current) {
+      trafficLayerRef.current.setMap(null);
+      trafficLayerRef.current = null;
+    }
+    if (mapLayer === 'traffic') {
+      trafficLayerRef.current = new google.maps.TrafficLayer();
+      trafficLayerRef.current.setMap(mapInstanceRef.current);
+    }
+
+    // 6. Set Map Type (satellite vs roadmap)
+    if (mapLayer === 'satellite') {
+      mapInstanceRef.current.setMapTypeId('satellite');
+    } else {
+      mapInstanceRef.current.setMapTypeId('roadmap');
+    }
+
+    // 7. Render dynamic Evacuation Polyline if active alert simulation is running
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null);
+      routePolylineRef.current = null;
+    }
+
+    if (currentStep >= 0) {
+      const shelterData = (locationMarkers[personalContext.location] || []).find((m: any) => m.category === 'shelter');
+      if (shelterData && userPos) {
+        let pathCoords = [userPos];
+        if (personalContext.location === 'Shibuya') {
+          pathCoords.push({ lat: 35.6580, lng: 139.7000 });
+          pathCoords.push({ lat: 35.6600, lng: 139.7020 });
+        } else if (personalContext.location === 'Minato') {
+          pathCoords.push({ lat: 35.6575, lng: 139.7420 });
+          pathCoords.push({ lat: 35.6565, lng: 139.7450 });
+        } else if (personalContext.location === 'Shinjuku') {
+          pathCoords.push({ lat: 35.6865, lng: 139.7050 });
+          pathCoords.push({ lat: 35.6852, lng: 139.7080 });
+        }
+        pathCoords.push({ lat: shelterData.lat, lng: shelterData.lng });
+
+        routePolylineRef.current = new google.maps.Polyline({
+          path: pathCoords,
+          geodesic: true,
+          strokeColor: '#10b981',
+          strokeOpacity: 0.85,
+          strokeWeight: 5,
+          map: mapInstanceRef.current
+        });
+
+        // Fit bounds to fit the route on screen smoothly
+        const bounds = new google.maps.LatLngBounds();
+        pathCoords.forEach(coord => bounds.extend(coord));
+        mapInstanceRef.current.fitBounds(bounds);
+      }
+    }
+
+  }, [googleMapsLoaded, personalContext.location, filterCategory, searchQuery, activeMarker, mapLayer, currentStep, user, isBypassed]);
 
   // Handle Credential Response from Google Sign-In
   const handleCredentialResponse = (response: any) => {
@@ -536,303 +784,799 @@ export default function App() {
           </div>
         ) : (
           /* ==========================================
-             MAIN MAMORI AI DISASTER CO-PILOT DASHBOARD
+             MAIN PREMIUM GOOGLE MAPS DISASTER CO-PILOT DASHBOARD
              ========================================== */
           <>
-            {/* Beautiful Profile / Session Status Bar */}
-            <div className="mx-4 mt-12 backdrop-blur-md bg-slate-900/50 border border-slate-800 rounded-2xl p-2.5 flex justify-between items-center animate-in slide-in-from-top-4 duration-500 relative z-10">
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  {user?.avatar ? (
-                    <img src={user.avatar} alt="Avatar" className="w-8 h-8 rounded-full border border-slate-700 bg-slate-900" />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full border border-indigo-500/30 bg-indigo-950/30 flex items-center justify-center text-xs text-indigo-400 font-bold">
-                      <User className="w-4 h-4" />
-                    </div>
-                  )}
-                  {/* Status Indicator */}
-                  <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-slate-950 animate-pulse ${
-                    isBypassed ? 'bg-amber-400' : 'bg-emerald-400'
-                  }`} />
+            {/* Custom keyframe styles for smooth offline animations */}
+            <style dangerouslySetInnerHTML={{ __html: `
+              @keyframes lineDash {
+                to { stroke-dashoffset: -20; }
+              }
+              @keyframes pulseRadar {
+                0% { r: 8px; opacity: 0.8; }
+                100% { r: 24px; opacity: 0; }
+              }
+              @keyframes scanline {
+                0% { transform: translateY(-100%); }
+                100% { transform: translateY(100%); }
+              }
+              .line-dash {
+                animation: lineDash 1.2s linear infinite;
+              }
+              .radar-pulse {
+                animation: pulseRadar 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+              }
+              .scan-overlay {
+                animation: scanline 8s linear infinite;
+              }
+              .scrollbar-none::-webkit-scrollbar {
+                display: none;
+              }
+              .scrollbar-none {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+              }
+            `}} />
+
+            {/* REAL GOOGLE MAPS DIV */}
+            <div 
+              ref={mapRef} 
+              className="absolute inset-0 w-full h-full z-0 overflow-hidden" 
+              style={{ display: googleMapsLoaded ? 'block' : 'none' }}
+            />
+
+            {/* SVG Fallback Map (Offline and No-Key resilience) */}
+            {!googleMapsLoaded && (() => {
+              // Extract current markers based on category filter and search query
+              const currentMarkers = (locationMarkers[personalContext.location] || []).filter((m: any) => {
+                const matchesCategory = filterCategory === 'all' || m.category === filterCategory;
+                const matchesSearch = searchQuery === '' || 
+                  m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                  m.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  m.category.toLowerCase().includes(searchQuery.toLowerCase());
+                return matchesCategory && matchesSearch;
+              });
+
+              // Coordinates and Routes config
+              const mapConfig = {
+                Shibuya: {
+                  user: { x: 180, y: 490 },
+                  shelter: { x: 252, y: 345 },
+                  route: "M 180 490 L 180 420 L 252 420 L 252 345"
+                },
+                Minato: {
+                  user: { x: 120, y: 480 },
+                  shelter: { x: 210, y: 390 },
+                  route: "M 120 480 L 195 480 L 195 390 L 210 390"
+                },
+                Shinjuku: {
+                  user: { x: 190, y: 340 },
+                  shelter: { x: 250, y: 490 },
+                  route: "M 190 340 L 190 480 L 250 480 L 250 490"
+                }
+              }[personalContext.location];
+
+              return (
+                <div className="absolute inset-0 w-full h-full bg-[#0d1117] z-0 overflow-hidden select-none">
+                  {/* Outer Map SVG wrapper */}
+                  <svg className="absolute inset-0 w-full h-full" viewBox="0 0 390 844" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    
+                    {/* SATELLITE GRID OVERLAY */}
+                    {mapLayer === 'satellite' && (
+                      <g opacity="0.15">
+                        <defs>
+                          <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+                            <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#0ea5e9" strokeWidth="0.5" />
+                          </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#grid)" />
+                      </g>
+                    )}
+
+                    {/* DYNAMIC LANDMARKS & PARKS */}
+                    {personalContext.location === 'Shibuya' && (
+                      <>
+                        {/* Yoyogi Park */}
+                        <path d="M 15 40 C 80 20, 160 50, 140 180 C 130 240, 60 260, 15 180 Z" fill={mapLayer === 'satellite' ? '#022c22' : '#064e3b'} fillOpacity={mapLayer === 'satellite' ? '0.7' : '0.8'} stroke="#10b981" strokeWidth="0.5" />
+                        <text x="55" y="140" fill="#10b981" fontSize="9" fontWeight="bold" className="font-sans tracking-wide" opacity="0.6">Yoyogi Park</text>
+                        
+                        {/* Miyashita Park */}
+                        <rect x="235" y="260" width="25" height="130" rx="4" fill={mapLayer === 'satellite' ? '#042f2e' : '#0f766e'} fillOpacity="0.8" stroke="#14b8a6" strokeWidth="0.5" />
+                        <text x="248" y="325" fill="#14b8a6" fontSize="7" fontWeight="bold" writingMode="tb" className="font-sans" opacity="0.8">Miyashita Park</text>
+
+                        {/* Shibuya Crossing Visual */}
+                        <g opacity="0.2">
+                          <rect x="170" y="410" width="20" height="20" fill="#334155" />
+                          <path d="M 172 410 L 172 430 M 176 410 L 176 430 M 180 410 L 180 430 M 184 410 L 184 430 M 188 410 L 188 430" stroke="white" strokeWidth="1" />
+                        </g>
+                        <text x="140" y="445" fill="#94a3b8" fontSize="8" className="font-sans font-medium" opacity="0.4">Shibuya Crossing</text>
+                      </>
+                    )}
+
+                    {personalContext.location === 'Minato' && (
+                      <>
+                        {/* Shiba Park */}
+                        <rect x="150" y="320" width="140" height="140" rx="10" fill={mapLayer === 'satellite' ? '#022c22' : '#064e3b'} fillOpacity="0.8" stroke="#10b981" strokeWidth="0.5" />
+                        <text x="175" y="360" fill="#10b981" fontSize="9" fontWeight="bold" className="font-sans tracking-wide" opacity="0.6">Shiba Park</text>
+
+                        {/* Tokyo Tower Truss Symbol */}
+                        <g transform="translate(235, 415)" opacity="0.8">
+                          <line x1="0" y1="15" x2="0" y2="-20" stroke="#ef4444" strokeWidth="1.5" />
+                          <line x1="-10" y1="15" x2="0" y2="-10" stroke="#ef4444" strokeWidth="1.5" />
+                          <line x1="10" y1="15" x2="0" y2="-10" stroke="#ef4444" strokeWidth="1.5" />
+                          <line x1="-6" y1="0" x2="6" y2="0" stroke="#ef4444" strokeWidth="1" />
+                          <line x1="-4" y1="-10" x2="4" y2="-10" stroke="#ef4444" strokeWidth="1" />
+                          <circle cx="0" cy="-21" r="2" fill="#ef4444" className="animate-pulse" />
+                        </g>
+                        <text x="210" y="445" fill="#ef4444" fontSize="8" fontWeight="bold" className="font-sans" opacity="0.7">Tokyo Tower</text>
+                      </>
+                    )}
+
+                    {personalContext.location === 'Shinjuku' && (
+                      <>
+                        {/* Shinjuku Gyoen */}
+                        <rect x="140" y="380" width="220" height="230" rx="16" fill={mapLayer === 'satellite' ? '#022c22' : '#064e3b'} fillOpacity="0.8" stroke="#10b981" strokeWidth="0.5" />
+                        <text x="210" y="440" fill="#10b981" fontSize="10" fontWeight="bold" className="font-sans tracking-wide" opacity="0.6">Shinjuku Gyoen</text>
+
+                        {/* Gov Building Outline */}
+                        <g transform="translate(60, 260)" opacity="0.6" stroke="#38bdf8" strokeWidth="1" fill="none">
+                          <rect x="0" y="10" width="12" height="60" rx="1" />
+                          <rect x="18" y="10" width="12" height="60" rx="1" />
+                          <rect x="0" y="40" width="30" height="30" />
+                          <path d="M 6 10 L 6 0 M 24 10 L 24 0" />
+                        </g>
+                        <text x="45" y="340" fill="#38bdf8" fontSize="8" className="font-sans" opacity="0.5">TMG Building</text>
+                      </>
+                    )}
+
+                    {/* ROAD NETWORKS LAYER */}
+                    <g opacity={mapLayer === 'satellite' ? '0.3' : '0.5'}>
+                      {personalContext.location === 'Shibuya' && (
+                        <>
+                          {/* Meiji-dori */}
+                          <path d="M 180 40 L 180 800" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth={mapLayer === 'traffic' ? '5' : '4'} strokeLinecap="round" />
+                          {/* Yamate-dori */}
+                          <path d="M 80 40 L 80 800" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="3" strokeLinecap="round" />
+                          {/* Route 246 */}
+                          <path d="M 15 420 L 375 420" stroke={mapLayer === 'traffic' ? '#ef4444' : '#475569'} strokeWidth={mapLayer === 'traffic' ? '6' : '5'} strokeLinecap="round" />
+                          {/* Miyashita Crossing road connection */}
+                          <path d="M 15 280 L 375 580" stroke={mapLayer === 'traffic' ? '#f59e0b' : '#334155'} strokeWidth="3" strokeLinecap="round" />
+                        </>
+                      )}
+
+                      {personalContext.location === 'Minato' && (
+                        <>
+                          <path d="M 50 150 L 340 650" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth="4" strokeLinecap="round" />
+                          <path d="M 50 650 L 340 150" stroke={mapLayer === 'traffic' ? '#f59e0b' : '#475569'} strokeWidth="4" strokeLinecap="round" />
+                          <path d="M 195 50 L 195 780" stroke={mapLayer === 'traffic' ? '#ef4444' : '#334155'} strokeWidth="3" strokeLinecap="round" />
+                          <path d="M 50 400 L 350 400" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="3" strokeLinecap="round" />
+                        </>
+                      )}
+
+                      {personalContext.location === 'Shinjuku' && (
+                        <>
+                          {/* Grids */}
+                          <line x1="90" y1="50" x2="90" y2="780" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth="3" />
+                          <line x1="190" y1="50" x2="190" y2="780" stroke={mapLayer === 'traffic' ? '#ef4444' : '#475569'} strokeWidth="4" />
+                          <line x1="290" y1="50" x2="290" y2="780" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="3" />
+                          <line x1="15" y1="200" x2="375" y2="200" stroke={mapLayer === 'traffic' ? '#10b981' : '#475569'} strokeWidth="4" />
+                          <line x1="15" y1="340" x2="375" y2="340" stroke={mapLayer === 'traffic' ? '#f59e0b' : '#475569'} strokeWidth="3" />
+                          <line x1="15" y1="480" x2="375" y2="480" stroke={mapLayer === 'traffic' ? '#10b981' : '#334155'} strokeWidth="4" />
+                          <line x1="15" y1="620" x2="375" y2="620" stroke={mapLayer === 'traffic' ? '#334155' : '#1e293b'} strokeWidth="3" />
+                        </>
+                      )}
+                    </g>
+
+                    {/* DYNAMIC GLOWING HAZARD ZONES (If Hazard layer or Alert is active) */}
+                    {(mapLayer === 'hazard' || currentStep >= 0) && (
+                      <g>
+                        {/* Red warning radial gradients around hazards */}
+                        {personalContext.location === 'Shibuya' && (
+                          <circle cx="100" cy="450" r="45" fill="url(#hazardGrad)" className="animate-pulse" opacity="0.35" />
+                        )}
+                        {personalContext.location === 'Minato' && (
+                          <circle cx="150" cy="580" r="50" fill="url(#hazardGrad)" className="animate-pulse" opacity="0.35" />
+                        )}
+                        {personalContext.location === 'Shinjuku' && (
+                          <circle cx="190" cy="200" r="45" fill="url(#hazardGrad)" className="animate-pulse" opacity="0.35" />
+                        )}
+                        <defs>
+                          <radialGradient id="hazardGrad">
+                            <stop offset="0%" stopColor="#ef4444" stopOpacity="0.4" />
+                            <stop offset="70%" stopColor="#ef4444" stopOpacity="0.1" />
+                            <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+                          </radialGradient>
+                        </defs>
+                      </g>
+                    )}
+
+                    {/* ANIMATED CO-PILOT SAFE EVACUATION ROUTE PATH */}
+                    {currentStep >= 0 && mapConfig && (
+                      <g>
+                        {/* Route Shadow glow */}
+                        <path
+                          d={mapConfig.route}
+                          fill="none"
+                          stroke="#10b981"
+                          strokeWidth="7"
+                          strokeLinecap="round"
+                          opacity="0.3"
+                          style={{ filter: 'blur(3px)' }}
+                        />
+                        {/* Active animated dashed line */}
+                        <path
+                          d={mapConfig.route}
+                          fill="none"
+                          stroke="#10b981"
+                          strokeWidth="4.5"
+                          strokeLinecap="round"
+                          strokeDasharray="9 7"
+                          className="line-dash"
+                          style={{
+                            filter: 'drop-shadow(0 0 6px rgba(16, 185, 129, 0.8))'
+                          }}
+                        />
+                      </g>
+                    )}
+
+                    {/* DYNAMIC MARKERS (SHELTERS, WATER, CLINICS, DANGER) */}
+                    {currentMarkers.map((marker: any) => {
+                      const color = {
+                        shelter: '#10b981', // green
+                        water: '#0ea5e9',   // blue
+                        medical: '#a855f7', // purple
+                        hazard: '#ef4444'   // red
+                      }[marker.category as 'shelter' | 'water' | 'medical' | 'hazard'] || '#38bdf8';
+
+                      const isSelected = activeMarker === marker.id;
+
+                      return (
+                        <g 
+                          key={marker.id} 
+                          transform={`translate(${marker.x}, ${marker.y})`} 
+                          className="cursor-pointer group"
+                          onClick={() => setActiveMarker(marker.id)}
+                        >
+                          {/* Outer pulse indicator */}
+                          <circle r="12" fill="none" stroke={color} strokeWidth="1.5" className="radar-pulse" />
+                          {/* Inner pin shadow */}
+                          <ellipse cx="0" cy="8" rx="4" ry="1.5" fill="#000000" opacity="0.3" />
+                          
+                          {/* Pin body shape */}
+                          <path 
+                            d="M 0 8 C -5 2, -7.5 -3, -7.5 -9 C -7.5 -16, -4 -20, 0 -20 C 4 -20, 7.5 -16, 7.5 -9 C 7.5 -3, 5 2, 0 8 Z" 
+                            fill={color} 
+                            stroke="#0d1117" 
+                            strokeWidth="1.2"
+                            className={`transition-all duration-300 ${isSelected ? 'scale-125 -translate-y-1' : 'group-hover:scale-110 group-hover:-translate-y-0.5'}`}
+                          />
+                          {/* Pin white center core */}
+                          <circle cx="0" cy="-9" r="3.2" fill="#ffffff" />
+                          {/* Small icon mapping core dots */}
+                          <circle cx="0" cy="-9" r="1.5" fill={color} />
+                        </g>
+                      );
+                    })}
+
+                    {/* CURRENT USER POSITION (Blue pulsing dot) */}
+                    {mapConfig && (
+                      <g transform={`translate(${mapConfig.user.x}, ${mapConfig.user.y})`}>
+                        {/* Radar Ripple waves */}
+                        <circle cx="0" cy="0" r="12" fill="none" stroke="#2563eb" strokeWidth="1.5" className="radar-pulse" />
+                        <circle cx="0" cy="0" r="24" fill="none" stroke="#2563eb" strokeWidth="1" className="radar-pulse" style={{ animationDelay: '0.6s' }} />
+                        {/* Blue glow core */}
+                        <circle cx="0" cy="0" r="8" fill="#3b82f6" fillOpacity="0.3" />
+                        {/* Base Core Dot */}
+                        <circle cx="0" cy="0" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="1.5" style={{ filter: 'drop-shadow(0 0 4px rgba(37, 99, 235, 0.6))' }} />
+                      </g>
+                    )}
+                  </svg>
                 </div>
-                <div className="flex flex-col text-left">
-                  <span className="text-[11px] font-bold text-slate-100 font-sans leading-none">
-                    {user?.name || "Local Emergency User"}
-                  </span>
-                  <span className="text-[9px] text-slate-400 font-mono leading-none mt-0.5 uppercase tracking-wide">
-                    {isBypassed ? "⚠️ Emergency Offline Mode" : "🔐 Secure Google Session"}
-                  </span>
+              );
+            })()}
+
+            {/* FLOATING TOP GOOGLE MAPS SEARCH BAR */}
+            <div className="absolute top-12 left-4 right-4 z-30 flex flex-col gap-2.5">
+              <div className="backdrop-blur-md bg-slate-900/85 border border-slate-800/80 rounded-2xl py-2.5 px-4 flex items-center justify-between shadow-2xl relative">
+                <div className="flex items-center gap-2.5 flex-1 mr-2">
+                  <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                  <input 
+                    type="text" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={`Search ${personalContext.location} evacuation...`}
+                    className="bg-transparent text-xs text-white placeholder-slate-400 focus:outline-none w-full border-none"
+                  />
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="p-0.5 hover:bg-slate-800 rounded-full transition text-slate-400 hover:text-slate-200">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Vertical Divider line */}
+                <div className="h-4 w-px bg-slate-800 mx-1.5 shrink-0" />
+
+                {/* Profile Session Avatar / Menu Button with Hover LogOut Animation */}
+                <div className="flex items-center gap-2 shrink-0 ml-1.5 relative group/profile">
+                  <button 
+                    onClick={handleSignOut}
+                    className="w-7 h-7 rounded-full border border-slate-700 hover:border-red-500/30 hover:bg-red-500/10 flex items-center justify-center transition bg-slate-950/80 text-slate-400 hover:text-red-400 relative overflow-hidden"
+                    title="Log Out Session"
+                  >
+                    {user?.avatar ? (
+                      <>
+                        <img src={user.avatar} alt="Avatar" className="w-full h-full rounded-full group-hover/profile:opacity-0 transition-opacity" />
+                        <LogOut className="w-3.5 h-3.5 absolute opacity-0 group-hover/profile:opacity-100 transition-opacity text-red-400" />
+                      </>
+                    ) : (
+                      <>
+                        <User className="w-3.5 h-3.5 group-hover/profile:opacity-0 transition-opacity" />
+                        <LogOut className="w-3.5 h-3.5 absolute opacity-0 group-hover/profile:opacity-100 transition-opacity text-red-400" />
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
-              
+
+              {/* HORIZONTAL CATEGORY SCROLLABLE CHIPS */}
+              <div className="overflow-x-auto whitespace-nowrap flex gap-2 pb-1 scrollbar-none select-none">
+                {[
+                  { id: 'all', label: 'All', emoji: '🗺️' },
+                  { id: 'shelter', label: 'Shelters', emoji: '🏥' },
+                  { id: 'water', label: 'Water', emoji: '⛲' },
+                  { id: 'medical', label: 'Medical', emoji: '🩹' },
+                  { id: 'hazard', label: 'Hazards', emoji: '🚧' }
+                ].map((chip) => {
+                  const isActive = filterCategory === chip.id;
+                  return (
+                    <button
+                      key={chip.id}
+                      onClick={() => setFilterCategory(chip.id as any)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10.5px] font-extrabold tracking-wide uppercase transition border shadow-md active:scale-95 ${
+                        isActive 
+                          ? 'bg-indigo-600 border-indigo-400 text-white font-sans' 
+                          : 'bg-slate-900/85 backdrop-blur border-slate-800/80 text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      <span className="text-xs leading-none">{chip.emoji}</span>
+                      {chip.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* FLOATING RIGHT-SIDE CONTROLS */}
+            <div className="absolute top-36 right-4 z-30 flex flex-col gap-2.5">
+              {/* Map Layers Controller */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowLayerMenu(!showLayerMenu)}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-lg border transition ${
+                    showLayerMenu || mapLayer !== 'streets'
+                      ? 'bg-indigo-600 border-indigo-400 text-white'
+                      : 'bg-slate-900/85 backdrop-blur border-slate-800/80 text-slate-300 hover:text-white'
+                  }`}
+                  title="Map Layers"
+                >
+                  <Layers className="w-4 h-4" />
+                </button>
+
+                {/* Floating Layers Dropdown */}
+                {showLayerMenu && (
+                  <div className="absolute right-11 top-0 bg-slate-900/95 backdrop-blur border border-slate-800 rounded-xl p-2 shadow-2xl flex flex-col gap-1.5 min-w-[120px] animate-in fade-in zoom-in-95 duration-200">
+                    {[
+                      { id: 'streets', label: 'Vector Map' },
+                      { id: 'satellite', label: 'Satellite' },
+                      { id: 'traffic', label: 'Live Traffic' },
+                      { id: 'hazard', label: 'Hazard Feed' }
+                    ].map((layer) => (
+                      <button
+                        key={layer.id}
+                        onClick={() => {
+                          setMapLayer(layer.id as any);
+                          setShowLayerMenu(false);
+                        }}
+                        className={`text-left text-[10px] font-extrabold uppercase px-2.5 py-1.5 rounded-lg transition ${
+                          mapLayer === layer.id
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                        }`}
+                      >
+                        {layer.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Recenter Button */}
               <button
-                onClick={handleSignOut}
-                className="p-1.5 rounded-lg bg-slate-800/40 hover:bg-red-500/10 hover:text-red-400 text-slate-400 transition"
-                title="Log Out Session"
+                onClick={() => {
+                  setActiveMarker(null);
+                  setSearchQuery('');
+                }}
+                className="w-9 h-9 rounded-xl bg-slate-900/85 backdrop-blur border border-slate-800/80 text-slate-300 hover:text-white flex items-center justify-center shadow-lg active:scale-95 transition"
+                title="Recenter Map"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <Navigation className="w-4 h-4 transform rotate-45" />
+              </button>
+
+              {/* Voice Assistant Toggle */}
+              <button
+                onClick={() => setVoiceAssistant(!voiceAssistant)}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-lg border transition active:scale-95 ${
+                  voiceAssistant
+                    ? 'bg-emerald-600 border-emerald-400 text-white animate-pulse'
+                    : 'bg-slate-900/85 backdrop-blur border-slate-800/80 text-slate-300 hover:text-white'
+                }`}
+                title="Audio Co-pilot Guidance"
+              >
+                {voiceAssistant ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+              </button>
+
+              {/* Emergency SOS Pulse Trigger */}
+              <button
+                onClick={handleTriggerAlert}
+                disabled={isSimulating}
+                className="w-10 h-10 rounded-xl bg-red-600 hover:bg-red-500 text-white border border-red-400 flex items-center justify-center shadow-lg active:scale-95 disabled:opacity-45 disabled:pointer-events-none transition relative group"
+                title="Trigger Emergency Advisory"
+              >
+                <span className="absolute inset-0 rounded-xl bg-red-600 animate-ping opacity-30 group-hover:opacity-40" />
+                <AlertTriangle className="w-4.5 h-4.5 text-white animate-pulse relative z-10" />
               </button>
             </div>
 
-            {/* Device Content Area */}
-            <div className="flex-1 flex flex-col pt-2 overflow-y-auto px-4 pb-24 scrollbar-thin">
-              
-              {/* Disaster Copilot Context Selector */}
-              <div className="mb-4 backdrop-blur-md bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 mt-2">
-                <div className="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
-                  <div className="flex items-center gap-1.5 text-slate-300">
-                    <Settings className="w-4 h-4 text-slate-400" />
-                    <span className="text-[11px] font-semibold tracking-wider uppercase font-sans">Demo Configurations</span>
-                  </div>
-                  <div className="flex gap-1">
+            {/* SELECTION POPUP INFO CARD OVER MAP */}
+            {activeMarker && (() => {
+              const marker = (locationMarkers[personalContext.location] || []).find((m: any) => m.id === activeMarker);
+              if (!marker) return null;
+              const isShelter = marker.category === 'shelter';
+              return (
+                <div className="absolute top-60 left-4 right-4 z-20 backdrop-blur-md bg-slate-950/85 border border-slate-800 rounded-2xl p-3.5 shadow-2xl animate-in slide-in-from-top-4 duration-300 flex flex-col gap-2">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs">
+                        {marker.category === 'shelter' ? '🏥' : marker.category === 'water' ? '⛲' : marker.category === 'medical' ? '🩹' : '🚧'}
+                      </span>
+                      <h4 className="text-[11.5px] font-black text-slate-100 font-sans tracking-wide uppercase">{marker.name}</h4>
+                    </div>
                     <button 
-                      onClick={() => !isSimulating && setActiveHazard('earthquake')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition flex items-center gap-1 ${activeHazard === 'earthquake' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-slate-800/40 text-slate-500 border border-transparent'}`}
+                      onClick={() => setActiveMarker(null)}
+                      className="p-0.5 hover:bg-slate-800 rounded-full transition text-slate-400 hover:text-slate-200"
                     >
-                      <Activity className="w-2.5 h-2.5" /> Quake
-                    </button>
-                    <button 
-                      onClick={() => !isSimulating && setActiveHazard('typhoon')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition flex items-center gap-1 ${activeHazard === 'typhoon' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' : 'bg-slate-800/40 text-slate-500 border border-transparent'}`}
-                    >
-                      <CloudLightning className="w-2.5 h-2.5" /> Typhoon
-                    </button>
-                    <button 
-                      onClick={() => !isSimulating && setActiveHazard('tsunami')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition flex items-center gap-1 ${activeHazard === 'tsunami' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-slate-800/40 text-slate-500 border border-transparent'}`}
-                    >
-                      <Waves className="w-2.5 h-2.5" /> Tsunami
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                  <p className="text-[10px] text-slate-400 leading-normal font-mono">{marker.desc}</p>
+                  
+                  {isShelter && (
+                    <div className="flex justify-between items-center mt-1 text-[10px]">
+                      <span className="text-emerald-400 font-bold flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> ADA Accessible
+                      </span>
+                      {currentStep < 0 && (
+                        <button 
+                          onClick={() => {
+                            handleTriggerAlert();
+                            setIsDrawerExpanded(true);
+                          }}
+                          className="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold px-2.5 py-1 rounded-lg uppercase tracking-wide transition font-sans text-[9px]"
+                        >
+                          Navigate Route
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
+              );
+            })()}
 
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div>
-                    <label className="text-slate-400 block mb-0.5">Language</label>
-                    <select 
-                      value={personalContext.language}
-                      disabled={isSimulating}
-                      onChange={(e) => setPersonalContext({...personalContext, language: e.target.value as PersonalContext['language']})}
-                      className="w-full bg-slate-950/80 border border-slate-800 text-slate-200 px-2 py-1 rounded-lg focus:outline-none focus:border-indigo-500/50"
-                    >
-                      <option value="English">🇬🇧 English</option>
-                      <option value="Chinese">🇨🇳 简体中文</option>
-                      <option value="Vietnamese">🇻🇳 Tiếng Việt</option>
-                      <option value="Japanese">🇯🇵 日本語</option>
-                    </select>
+            {/* GOOGLE MAPS EXPANDABLE BOTTOM SHEET DRAWER */}
+            <div 
+              className={`absolute left-0 right-0 bottom-0 bg-slate-900 border-t border-slate-800 rounded-t-3xl z-40 transition-all duration-300 ease-out shadow-2xl flex flex-col ${
+                isDrawerExpanded ? 'h-[520px]' : 'h-[110px]'
+              }`}
+            >
+              {/* Drawer Top Header - Interactive Drag/Expand Bar */}
+              <div 
+                onClick={() => setIsDrawerExpanded(!isDrawerExpanded)}
+                className="w-full py-3 flex flex-col items-center cursor-pointer hover:bg-slate-850/50 rounded-t-3xl transition duration-150 shrink-0"
+              >
+                {/* Visual Drag pill */}
+                <div className="w-10 h-1 bg-slate-700 rounded-full mb-1.5" />
+                
+                {/* Dynamic Status / ETA Display */}
+                <div className="w-full px-5 flex justify-between items-center text-left">
+                  <div className="flex gap-2.5 items-center">
+                    <Compass className={`w-5 h-5 text-indigo-400 ${isSimulating ? 'animate-spin' : ''}`} style={{ animationDuration: '6s' }} />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black tracking-tight text-white font-sans uppercase">
+                        {currentStep >= 4 
+                          ? (personalContext.location === 'Shibuya' ? 'Miyashita Park Safe Route' : personalContext.location === 'Minato' ? 'Shiba Park Safe Route' : 'Shinjuku Gyoen Safe Route')
+                          : currentStep >= 0 
+                          ? '📡 Analyzing active safety route...'
+                          : '🟢 SafeRoute AI Active'}
+                      </span>
+                      <span className="text-[9.5px] text-slate-400 font-mono leading-none mt-0.5 uppercase tracking-wide">
+                        {currentStep >= 4 
+                          ? '8 Min ETA • 450m • Hazard-Free Path' 
+                          : isBypassed ? '⚠️ Emergency Offline Local Base' : '🔐 Real-Time Cloud Node'}
+                      </span>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="text-slate-400 block mb-0.5">Location</label>
-                    <select 
-                      value={personalContext.location}
-                      disabled={isSimulating}
-                      onChange={(e) => setPersonalContext({...personalContext, location: e.target.value as PersonalContext['location']})}
-                      className="w-full bg-slate-950/80 border border-slate-800 text-slate-200 px-2 py-1 rounded-lg focus:outline-none"
-                    >
-                      <option value="Shibuya">Shibuya (渋谷)</option>
-                      <option value="Minato">Minato (港区)</option>
-                      <option value="Shinjuku">Shinjuku (新宿)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-slate-400 block mb-0.5">Floor Level</label>
-                    <select 
-                      value={personalContext.floor}
-                      disabled={isSimulating}
-                      onChange={(e) => setPersonalContext({...personalContext, floor: e.target.value as PersonalContext['floor']})}
-                      className="w-full bg-slate-950/80 border border-slate-800 text-slate-200 px-2 py-1 rounded-lg focus:outline-none"
-                    >
-                      <option value="9th Floor">9th Floor (High)</option>
-                      <option value="Ground Floor">Ground Floor (Low)</option>
-                      <option value="Basement">Basement</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-slate-400 block mb-0.5">Companions</label>
-                    <select 
-                      value={personalContext.companions}
-                      disabled={isSimulating}
-                      onChange={(e) => setPersonalContext({...personalContext, companions: e.target.value as PersonalContext['companions']})}
-                      className="w-full bg-slate-950/80 border border-slate-800 text-slate-200 px-2 py-1 rounded-lg focus:outline-none"
-                    >
-                      <option value="Traveling Solo">Traveling Solo</option>
-                      <option value="With a Child">With a Child</option>
-                      <option value="With Elderly Parents">With Elderly Parents</option>
-                    </select>
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="text-slate-400 block mb-0.5">Mobility Needs</label>
-                    <select 
-                      value={personalContext.mobility}
-                      disabled={isSimulating}
-                      onChange={(e) => setPersonalContext({...personalContext, mobility: e.target.value as PersonalContext['mobility']})}
-                      className="w-full bg-slate-950/80 border border-slate-800 text-slate-200 px-2 py-1 rounded-lg focus:outline-none"
-                    >
-                      <option value="Fully Mobile">Fully Mobile</option>
-                      <option value="Wheelchair User">Requires Wheelchair Access</option>
-                    </select>
+                  <div className="p-1 text-slate-400 hover:text-white transition shrink-0">
+                    {isDrawerExpanded ? <ChevronDown className="w-4.5 h-4.5" /> : <ChevronUp className="w-4.5 h-4.5" />}
                   </div>
                 </div>
               </div>
 
-              {/* Simulated Hazard Early Warning Card */}
-              {currentStep >= 0 ? (
-                <div className={`mb-4 animate-in fade-in slide-in-from-top duration-300 border rounded-2xl overflow-hidden shadow-lg ${
-                  activeHazard === 'earthquake' ? 'bg-red-950/30 border-red-500/40 text-red-200' :
-                  activeHazard === 'typhoon' ? 'bg-sky-950/30 border-sky-500/40 text-sky-200' :
-                  'bg-amber-950/30 border-amber-500/40 text-amber-200'
-                }`}>
-                  <div className={`px-3 py-2 flex items-center justify-between text-xs font-bold border-b ${
-                    activeHazard === 'earthquake' ? 'bg-red-950/60 border-red-500/20' :
-                    activeHazard === 'typhoon' ? 'bg-sky-950/60 border-sky-500/20' :
-                    'bg-amber-950/60 border-amber-500/20'
-                  }`}>
-                    <span className="flex items-center gap-1.5 uppercase font-sans">
-                      <AlertTriangle className="w-3.5 h-3.5 animate-bounce" />
-                      {activeHazard === 'earthquake' ? 'JMA Earthquake Warning' : activeHazard === 'typhoon' ? 'Typhoon Inflow Advisory' : 'Tsunami High Alert'}
-                    </span>
-                    <span className="text-[10px] font-mono">LIVE FEED</span>
-                  </div>
-                  <div className="p-3 text-xs flex gap-2">
-                    <div className="flex-1 font-mono leading-relaxed select-text">
-                      {activeHazard === 'earthquake' && (
-                        <>
-                          <span className="font-semibold block mb-1">気象庁 地震緊急警報 (JMA)</span>
-                          千葉県東方沖でマグニチュード7.2の強い地震発生。東京都渋谷区で強い揺れ（震度5強以上）に警戒してください。
-                        </>
-                      )}
-                      {activeHazard === 'typhoon' && (
-                        <>
-                          <span className="font-semibold block mb-1">特別台風警報 (JMA)</span>
-                          非常に強い台風が関東地方に接近。渋谷区周辺で最大風速140km/hに達する見込み。不要不急の外出を控えてください。
-                        </>
-                      )}
-                      {activeHazard === 'tsunami' && (
-                        <>
-                          <span className="font-semibold block mb-1">大津波警報発表 (JMA)</span>
-                          渋谷区沿岸低地等に危険到達。津波予想高3.2m。直ちに高台や避難ビルなどの安全な場所へ避難を開始してください。
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* Standby State Screen */
-                <div className="flex-1 flex flex-col justify-center items-center py-8 text-center">
-                  <div className="w-20 h-28 bg-slate-900 border border-slate-800 rounded-3xl flex items-center justify-center mb-4 shadow-inner">
-                    <Smartphone className="w-10 h-10 text-indigo-400 animate-pulse" />
-                  </div>
-                  <h2 className="text-lg font-bold mb-1 text-slate-100 font-sans">System Armed & Ready</h2>
-                  <p className="text-slate-400 text-xs px-6 leading-relaxed max-w-[280px]">
-                    Configured with local Tokyo open shelter feeds, GSI maps, and Gemini 3.5. Click below to simulate a disaster alert.
-                  </p>
-                  <div className="mt-6 flex flex-col items-center gap-2">
-                    <button 
-                      onClick={handleTriggerAlert}
-                      className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2.5 px-6 rounded-full shadow-lg hover:shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-2"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      {labels.trigger}
-                    </button>
-                    <span className="text-[10px] text-slate-500 font-mono">DEMO PLAYBACK ENGINE v1.0</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Active Copilot Synthesis Panel */}
-              {currentStep >= 4 && (
-                <div className="mb-4 animate-in fade-in zoom-in-95 duration-500 border border-slate-800 bg-slate-900/40 rounded-2xl overflow-hidden p-4 shadow-xl">
-                  <div className="flex items-center gap-2 mb-3 border-b border-slate-800 pb-2">
-                    <Shield className="w-5 h-5 text-indigo-400" />
-                    <span className="text-xs font-extrabold tracking-wider uppercase font-sans text-indigo-300">
-                      {labels.instructions}
-                    </span>
-                  </div>
-
-                  {/* Step Commands */}
-                  <div className="space-y-3">
-                    {getDynamicAdvice().map((step) => (
-                      <div key={step.num} className="flex gap-3 items-start p-2 bg-slate-950/50 rounded-xl border border-slate-900">
-                        <div className="w-6 h-6 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-xs font-extrabold text-indigo-400 font-mono shrink-0">
-                          {step.num}
-                        </div>
-                        <div className="flex-1 text-xs">
-                          <h3 className="font-bold text-slate-100 font-sans">{step.title}</h3>
-                          <p className="text-slate-400 mt-0.5 leading-relaxed">{step.desc}</p>
+              {/* Drawer Content Area (Scrollable when expanded) */}
+              {isDrawerExpanded && (
+                <div className="flex-1 overflow-y-auto px-5 pb-8 scrollbar-none space-y-4">
+                  
+                  {/* VOICE ASSISTANT LIVE FEED (If active) */}
+                  {voiceAssistant && (
+                    <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-2xl p-3 flex gap-2.5 items-center animate-in zoom-in-95 duration-200">
+                      <div className="relative shrink-0">
+                        <span className="absolute -inset-1 rounded-full bg-emerald-500 animate-ping opacity-30" />
+                        <div className="w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center">
+                          <Mic className="w-3.5 h-3.5 text-emerald-400" />
                         </div>
                       </div>
-                    ))}
+                      <div className="flex-1 text-[10.5px]">
+                        <span className="font-extrabold uppercase text-emerald-400 block tracking-wide font-sans text-[9.5px]">Voice Assistant Active</span>
+                        <p className="text-slate-300 font-mono leading-relaxed mt-0.5">
+                          {currentStep >= 4 
+                            ? "“Follow the highlighted green line along Meiji-dori. Ahead on Miyashita Crossing, shelter is elevated. No hazards reported.”"
+                            : "“Standing by. Ready to vocalize live escape telemetry and triage routing once simulation starts.”"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CONFIGURATION / SELECTORS CARD */}
+                  <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3.5 space-y-3">
+                    <div className="flex items-center gap-1.5 text-slate-300 pb-1.5 border-b border-slate-900/60">
+                      <Settings className="w-4 h-4 text-slate-400" />
+                      <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans">Disaster Context Setup</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 text-[10.5px]">
+                      <div>
+                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Language</label>
+                        <select 
+                          value={personalContext.language}
+                          disabled={isSimulating}
+                          onChange={(e) => setPersonalContext({...personalContext, language: e.target.value as PersonalContext['language']})}
+                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none focus:border-indigo-500/50"
+                        >
+                          <option value="English">🇬🇧 English</option>
+                          <option value="Chinese">🇨🇳 简体中文</option>
+                          <option value="Vietnamese">🇻🇳 Tiếng Việt</option>
+                          <option value="Japanese">🇯🇵 日本語</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Hazard Event</label>
+                        <select 
+                          value={activeHazard}
+                          disabled={isSimulating}
+                          onChange={(e) => setActiveHazard(e.target.value as any)}
+                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none focus:border-indigo-500/50"
+                        >
+                          <option value="earthquake">🌋 Earthquake</option>
+                          <option value="typhoon">🌀 Typhoon</option>
+                          <option value="tsunami">🌊 Tsunami</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Location</label>
+                        <select 
+                          value={personalContext.location}
+                          disabled={isSimulating}
+                          onChange={(e) => setPersonalContext({...personalContext, location: e.target.value as PersonalContext['location']})}
+                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none"
+                        >
+                          <option value="Shibuya">Shibuya (渋谷)</option>
+                          <option value="Minato">Minato (港区)</option>
+                          <option value="Shinjuku">Shinjuku (新宿)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Floor Level</label>
+                        <select 
+                          value={personalContext.floor}
+                          disabled={isSimulating}
+                          onChange={(e) => setPersonalContext({...personalContext, floor: e.target.value as PersonalContext['floor']})}
+                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none"
+                        >
+                          <option value="9th Floor">9th Floor (High)</option>
+                          <option value="Ground Floor">Ground Floor (Low)</option>
+                          <option value="Basement">Basement</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Companions</label>
+                        <select 
+                          value={personalContext.companions}
+                          disabled={isSimulating}
+                          onChange={(e) => setPersonalContext({...personalContext, companions: e.target.value as PersonalContext['companions']})}
+                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none"
+                        >
+                          <option value="Traveling Solo">Traveling Solo</option>
+                          <option value="With a Child">With a Child</option>
+                          <option value="With Elderly Parents">With Elderly Parents</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Mobility Needs</label>
+                        <select 
+                          value={personalContext.mobility}
+                          disabled={isSimulating}
+                          onChange={(e) => setPersonalContext({...personalContext, mobility: e.target.value as PersonalContext['mobility']})}
+                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none"
+                        >
+                          <option value="Fully Mobile">Fully Mobile</option>
+                          <option value="Wheelchair User">Requires Wheelchair Access</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Trigger Approval Gate Manual Button */}
-                  <div className="mt-4 pt-3 border-t border-slate-850 flex justify-between items-center text-xs">
-                    <span className="text-[10px] text-indigo-400/80 font-mono flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Auto-coordinated
-                    </span>
-                    <button 
-                      onClick={() => setShowSmsModal(true)}
-                      className="text-indigo-400 hover:text-indigo-300 font-bold hover:underline flex items-center gap-1 transition"
-                    >
-                      {labels.approving} <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
+                  {/* ACTIVE LIVE HAZARD ADVISORY */}
+                  {currentStep >= 0 && (
+                    <div className={`border rounded-2xl overflow-hidden shadow-lg animate-in fade-in duration-300 ${
+                      activeHazard === 'earthquake' ? 'bg-red-950/20 border-red-500/35 text-red-200' :
+                      activeHazard === 'typhoon' ? 'bg-sky-950/20 border-sky-500/35 text-sky-200' :
+                      'bg-amber-950/20 border-amber-500/35 text-amber-200'
+                    }`}>
+                      <div className={`px-3 py-2 flex items-center justify-between text-[10.5px] font-bold border-b ${
+                        activeHazard === 'earthquake' ? 'bg-red-950/60 border-red-500/20' :
+                        activeHazard === 'typhoon' ? 'bg-sky-950/60 border-sky-500/20' :
+                        'bg-amber-950/60 border-amber-500/20'
+                      }`}>
+                        <span className="flex items-center gap-1.5 uppercase font-sans">
+                          <AlertTriangle className="w-3.5 h-3.5 animate-bounce" />
+                          {activeHazard === 'earthquake' ? '気象庁 地震緊急警報 (JMA)' : activeHazard === 'typhoon' ? '特別台風警報 (JMA)' : '大津波警報発表 (JMA)'}
+                        </span>
+                        <span className="text-[9px] font-mono tracking-wider">LIVE DATA</span>
+                      </div>
+                      <div className="p-3 text-[11px] font-mono leading-relaxed select-text">
+                        {activeHazard === 'earthquake' && "千葉県東方沖でマグニチュード7.2の強い地震発生。東京都渋谷区で強い揺れ（震度5強以上）に警戒してください。"}
+                        {activeHazard === 'typhoon' && "非常に強い台風が関東地方に接近。渋谷区周辺で最大風速140km/hに達する見込み。不要不急の外出を控えてください。"}
+                        {activeHazard === 'tsunami' && "渋谷区沿岸低地等に危険到達。津波予想高3.2m。直ちに高台や避難ビルなどの安全な場所へ避難を開始してください。"}
+                      </div>
+                    </div>
+                  )}
 
-              {/* Multi-Agent Orchestration Logs */}
-              {currentStep >= 0 && (
-                <div className="mb-4 bg-slate-900/30 border border-slate-900 rounded-2xl p-3.5">
-                  <h3 className="text-[11px] font-bold tracking-wider uppercase text-slate-400 flex items-center gap-2 mb-2">
-                    <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                    Multi-Agent Pipeline
-                  </h3>
-                  <div className="space-y-2">
-                    {agents.map((agent, i) => {
-                      const isActive = currentStep === i;
-                      return (
-                        <div key={agent.id} className={`text-[11px] rounded-xl p-2 transition ${isActive ? 'bg-indigo-950/25 border border-indigo-500/20' : 'bg-slate-950/30 border border-slate-950'}`}>
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-1.5">
-                              {agent.status === 'completed' && <Check className="w-3 h-3 text-emerald-400" />}
-                              {agent.status === 'running' && <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-ping shrink-0" />}
-                              {agent.status === 'idle' && <span className="w-1.5 h-1.5 bg-slate-800 rounded-full shrink-0" />}
-                              <span className={`font-bold font-sans ${isActive ? 'text-indigo-300' : 'text-slate-300'}`}>{agent.name}</span>
-                              <span className="text-[9px] text-slate-500 font-mono">({agent.role})</span>
-                            </div>
-                            <div>
+                  {/* MULTI-AGENT PIPELINE CONSOLE LOGS */}
+                  {currentStep >= 0 && (
+                    <div className="bg-slate-950/60 border border-slate-850/60 rounded-2xl p-3.5">
+                      <h3 className="text-[10.5px] font-bold tracking-wider uppercase text-slate-400 flex items-center gap-1.5 mb-2.5 pb-1 border-b border-slate-900/40">
+                        <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                        Multi-Agent Pipeline Logs
+                      </h3>
+                      <div className="space-y-2">
+                        {agents.map((agent: any, i: number) => {
+                          const isActive = currentStep === i;
+                          return (
+                            <div key={agent.id} className={`text-[10.5px] rounded-xl p-2.5 transition ${isActive ? 'bg-indigo-950/25 border border-indigo-500/30' : 'bg-slate-950/30 border border-slate-900/30'}`}>
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-1.5">
+                                  {agent.status === 'completed' && <Check className="w-3 h-3 text-emerald-400" />}
+                                  {agent.status === 'running' && <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-ping shrink-0" />}
+                                  {agent.status === 'idle' && <span className="w-1.5 h-1.5 bg-slate-800 rounded-full shrink-0" />}
+                                  <span className={`font-black font-sans uppercase ${isActive ? 'text-indigo-300' : 'text-slate-300'}`}>{agent.name}</span>
+                                  <span className="text-[9px] text-slate-500 font-mono">({agent.role})</span>
+                                </div>
+                                <div>
+                                  {agent.status === 'running' && <span className="text-[9px] text-indigo-400 font-bold animate-pulse font-mono uppercase">Thinking</span>}
+                                  {agent.status === 'completed' && <span className="text-[9px] text-emerald-400/80 font-mono font-bold uppercase">Ready</span>}
+                                  {agent.status === 'idle' && <span className="text-[9px] text-slate-600 font-mono font-semibold uppercase">Pending</span>}
+                                </div>
+                              </div>
+                              
                               {agent.status === 'running' && (
-                                <span className="text-[9px] text-indigo-400 font-semibold animate-pulse font-mono uppercase">Thinking...</span>
+                                <div className="mt-1.5 space-y-1">
+                                  <div className="h-1.5 w-full animate-shimmer rounded bg-slate-800" />
+                                  <div className="h-1.5 w-4/5 animate-shimmer rounded bg-slate-800" />
+                                </div>
                               )}
+
                               {agent.status === 'completed' && (
-                                <span className="text-[9px] text-emerald-400/80 font-mono font-bold uppercase">Ready</span>
+                                <p className="mt-1 text-[10px] text-slate-400 leading-normal font-mono select-text bg-slate-950/50 p-1.5 rounded border border-slate-900/40">{agent.result}</p>
                               )}
-                              {agent.status === 'idle' && (
-                                <span className="text-[9px] text-slate-600 font-mono font-semibold uppercase">Pending</span>
-                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* HIGH-TECH FINAL ACTION ADVICE CARDS */}
+                  {currentStep >= 4 && (
+                    <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3.5 space-y-3 shadow-xl">
+                      <div className="flex items-center gap-2 pb-2 border-b border-slate-900">
+                        <Shield className="w-5 h-5 text-indigo-400" />
+                        <span className="text-[11px] font-extrabold tracking-wider uppercase font-sans text-indigo-300">
+                          {labels.instructions}
+                        </span>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {getDynamicAdvice().map((step: any) => (
+                          <div key={step.num} className="flex gap-2.5 items-start p-2.5 bg-slate-950 border border-slate-900 rounded-xl">
+                            <div className="w-5 h-5 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-[10px] font-black text-indigo-400 font-mono shrink-0 mt-0.5">
+                              {step.num}
+                            </div>
+                            <div className="flex-1 text-[11px]">
+                              <h3 className="font-bold text-slate-100 font-sans leading-snug">{step.title}</h3>
+                              <p className="text-slate-400 mt-0.5 leading-relaxed">{step.desc}</p>
                             </div>
                           </div>
-                          
-                          {agent.status === 'running' && (
-                            <div className="mt-1.5 space-y-1">
-                              <div className="h-2 w-full animate-shimmer rounded bg-slate-800" />
-                              <div className="h-2 w-4/5 animate-shimmer rounded bg-slate-800" />
-                            </div>
-                          )}
+                        ))}
+                      </div>
 
-                          {agent.status === 'completed' && (
-                            <p className="mt-1 text-[10px] text-slate-400 leading-normal font-mono select-text bg-slate-950/50 p-1.5 rounded border border-slate-900">{agent.result}</p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                      {/* Manual Trigger For SMS Confirmation Portal */}
+                      <div className="pt-2 border-t border-slate-900 flex justify-between items-center text-[11px]">
+                        <span className="text-[10px] text-indigo-400/80 font-mono flex items-center gap-1 font-sans">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Safe Route Formulated
+                        </span>
+                        <button 
+                          onClick={() => setShowSmsModal(true)}
+                          className="text-indigo-400 hover:text-indigo-300 font-bold hover:underline flex items-center gap-1 transition"
+                        >
+                          {labels.approving} <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STANDBY STATE ADVICE PANEL */}
+                  {currentStep < 0 && (
+                    <div className="flex flex-col justify-center items-center py-6 text-center animate-in fade-in duration-300">
+                      <div className="w-12 h-16 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
+                        <Smartphone className="w-6 h-6 text-indigo-400 animate-pulse" />
+                      </div>
+                      <h4 className="text-[11.5px] font-bold text-slate-200 font-sans">SafeRoute AI Evacuation Assistant</h4>
+                      <p className="text-slate-400 text-[10px] px-6 mt-1.5 leading-relaxed max-w-[280px]">
+                        Configured with local Tokyo shelter feeds, Google Identity API, and Gemini 3.5. Trigger an alert on the map or expand configs to start co-piloting.
+                      </p>
+                      
+                      <button 
+                        onClick={handleTriggerAlert}
+                        className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 px-5 rounded-full shadow-lg hover:shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-2"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        {labels.trigger}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* RESTART SIMULATION IN DRAWER IF COMPLETED */}
+                  {currentStep >= 4 && (
+                    <div className="flex justify-center pt-2">
+                      <button 
+                        onClick={handleTriggerAlert}
+                        disabled={isSimulating}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-300 hover:text-white rounded-xl text-xs font-bold shadow transition active:scale-95"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Restart Emergency Replay
+                      </button>
+                    </div>
+                  )}
+
                 </div>
               )}
-
             </div>
 
             {/* Dynamic iOS Safety Gate Modal (Sliding Draw Sheet) */}
@@ -922,38 +1666,6 @@ export default function App() {
                 </div>
               </div>
             )}
-
-            {/* Sticky Global Control Bottom Bar */}
-            <div className="absolute bottom-0 inset-x-0 bg-slate-950/80 backdrop-blur-lg border-t border-slate-900 px-5 py-4 flex justify-between items-center z-40">
-              <div className="flex gap-1.5 items-center">
-                <Compass className="w-5 h-5 text-indigo-400 animate-spin" style={{ animationDuration: '6s' }} />
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-extrabold text-slate-200 leading-none tracking-wide font-sans uppercase">SafeRoute AI</span>
-                  <span className="text-[9px] text-slate-500 font-mono leading-none mt-0.5">Offline-Ready v1.0.0</span>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                {currentStep >= 0 && (
-                  <button 
-                    onClick={handleTriggerAlert}
-                    disabled={isSimulating}
-                    className="p-2 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-850 active:scale-95 disabled:opacity-50 transition"
-                    title="Restart Replay"
-                  >
-                    <RotateCcw className="w-4 h-4 text-slate-400" />
-                  </button>
-                )}
-                <button 
-                  onClick={handleTriggerAlert}
-                  disabled={isSimulating}
-                  className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-750 text-white text-[11px] font-extrabold py-2 px-4 rounded-xl shadow-md hover:shadow-indigo-600/10 active:scale-95 transition-all flex items-center gap-1.5"
-                >
-                  <Activity className="w-3.5 h-3.5" />
-                  {currentStep >= 0 ? 'Replay alert' : 'TRIGGER ALERT'}
-                </button>
-              </div>
-            </div>
           </>
         )}
 
