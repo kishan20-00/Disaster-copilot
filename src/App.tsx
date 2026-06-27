@@ -19,7 +19,6 @@ import {
   Waves,
   ArrowRight,
   Unlock,
-  LogIn,
   LogOut,
   Fingerprint,
   User
@@ -107,9 +106,7 @@ export default function App() {
   // Authentication & Session States
   const [user, setUser] = useState<{ name: string; email: string; avatar?: string } | null>(null);
   const [isBypassed, setIsBypassed] = useState(false);
-  const [authLoading, setAuthLoading] = useState<'none' | 'google' | 'email' | 'biometric'>('none');
-  const [emailInput, setEmailInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
+  const [authLoading, setAuthLoading] = useState<'none' | 'google' | 'biometric'>('none');
   const [showFaceIdModal, setShowFaceIdModal] = useState(false);
   const [faceIdState, setFaceIdState] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle');
 
@@ -196,21 +193,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [user, isBypassed]);
 
-  // Handle Email Sign-In Simulation
-  const handleEmailSignIn = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!emailInput) return;
-    setAuthLoading('email');
-    setTimeout(() => {
-      const name = emailInput.split('@')[0];
-      setUser({
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-        email: emailInput,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`
-      });
-      setAuthLoading('none');
-    }, 1200);
-  };
 
   // Handle Biometric Bypass Simulation
   const triggerBiometricBypass = () => {
@@ -232,8 +214,6 @@ export default function App() {
   const handleSignOut = () => {
     setUser(null);
     setIsBypassed(false);
-    setEmailInput('');
-    setPasswordInput('');
     setCurrentStep(-1);
     setIsSimulating(false);
     setSmsStatus('idle');
@@ -533,47 +513,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* Styled Divider */}
-              <div className="flex items-center gap-3 py-1">
-                <div className="flex-1 h-[1px] bg-slate-900" />
-                <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">Or email verification</span>
-                <div className="flex-1 h-[1px] bg-slate-900" />
-              </div>
-
-              {/* Email Form */}
-              <form onSubmit={handleEmailSignIn} className="space-y-3 text-xs">
-                <div className="space-y-1">
-                  <label className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block">Email Address</label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="Enter your email..."
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    className="w-full h-10 bg-slate-900/60 border border-slate-800 rounded-xl px-3 text-white focus:outline-none focus:border-indigo-500/50 transition font-sans text-xs"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block">Access Key</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    className="w-full h-10 bg-slate-900/60 border border-slate-800 rounded-xl px-3 text-white focus:outline-none focus:border-indigo-500/50 transition font-mono text-xs"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={authLoading !== 'none'}
-                  className="w-full h-10 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl transition duration-200 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
-                >
-                  {authLoading === 'email' && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                  <LogIn className="w-3.5 h-3.5" />
-                  {authLoading === 'email' ? "Authenticating..." : "Sign In with Email"}
-                </button>
-              </form>
             </div>
 
             {/* Offline Biometric Bypass (The Wow Factor) */}
