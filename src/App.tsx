@@ -1,5 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import {
+  generateActionSteps,
+  generateSmsDraft,
+  isGeminiConfigured,
+  runCommanderAgent,
+  runPersonalAgent,
+  runRouteAgent,
+  runSituationAgent,
+  runTranslateAgent
+} from './services/gemini';
+import type { ActionStep, HazardSignal } from './services/gemini';
+import { fetchHazardSignal } from './services/jma';
+import { getCityFallback, requestUserPosition } from './services/geolocation';
+import type { LatLng } from './services/geolocation';
+import {
   Shield,
   Activity,
   Users,
@@ -326,6 +340,13 @@ export default function App() {
   const lastLocationRef = useRef<string>('');
   const infoWindowRef = useRef<any>(null);
 
+  // Live, model-generated state (replaces hardcoded JMA bulletins, evac steps, SMS draft, user pin)
+  const [hazardSignal, setHazardSignal] = useState<HazardSignal | null>(null);
+  const [liveSteps, setLiveSteps] = useState<ActionStep[] | null>(null);
+  const [liveSmsDraft, setLiveSmsDraft] = useState<string | null>(null);
+  const [livePosition, setLivePosition] = useState<LatLng | null>(null);
+  const pipelineRunIdRef = useRef(0);
+
   // Real Google Maps API Integration States & Refs
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
@@ -496,12 +517,7 @@ export default function App() {
     });
 
     // 4. Place current user position pin (Blue pulsing core dot)
-    const userPositions = {
-      Shibuya: { lat: 35.6565, lng: 139.7000 },
-      Minato: { lat: 35.6595, lng: 139.7390 },
-      Shinjuku: { lat: 35.6882, lng: 139.7015 }
-    };
-    const userPos = userPositions[personalContext.location];
+    const userPos = livePosition ?? getCityFallback(personalContext.location);
     if (userPos) {
       const userMarker = new google.maps.Marker({
         position: userPos,
@@ -576,67 +592,47 @@ export default function App() {
       }
     }
 
-  }, [googleMapsLoaded, personalContext.location, dynamicMarkers, mapLayer, currentStep, user, isBypassed]);
+  }, [googleMapsLoaded, personalContext.location, dynamicMarkers, mapLayer, currentStep, user, isBypassed, livePosition]);
 
-  // Dynamic Google Places API Fetching and Syncing
+  // Dynamic Google Places API Fetching and Syncing — fully data-driven, no hardcoded markers.
   useEffect(() => {
     if (!googleMapsLoaded || !mapInstanceRef.current || !mapCenter || typeof google === 'undefined' || !google.maps || !google.maps.places) return;
 
-    let searchConfigs: { category: string; type: string }[] = [];
+    const CATEGORY_TYPES: Record<string, string[]> = {
+      shelter: ['school', 'park', 'stadium', 'university', 'city_hall', 'local_government_office', 'gym'],
+      water: ['convenience_store', 'supermarket', 'drinking_water', 'gas_station'],
+      medical: ['hospital', 'pharmacy', 'doctor', 'health'],
+      station: ['transit_station', 'subway_station', 'train_station', 'bus_station']
+    };
 
-    if (filterCategory === 'shelter') {
-      searchConfigs = [
-        { category: 'shelter', type: 'school' },
-        { category: 'shelter', type: 'park' }
-      ];
-    } else if (filterCategory === 'water') {
-      searchConfigs = [
-        { category: 'water', type: 'convenience_store' },
-        { category: 'water', type: 'supermarket' }
-      ];
-    } else if (filterCategory === 'medical') {
-      searchConfigs = [
-        { category: 'medical', type: 'hospital' },
-        { category: 'medical', type: 'pharmacy' }
-      ];
-    } else if (filterCategory === 'station') {
-      searchConfigs = [
-        { category: 'station', type: 'transit_station' }
-      ];
-    } else { // 'all'
-      searchConfigs = [
-        { category: 'shelter', type: 'school' },
-        { category: 'shelter', type: 'park' },
-        { category: 'water', type: 'convenience_store' },
-        { category: 'medical', type: 'hospital' },
-        { category: 'station', type: 'transit_station' }
-      ];
+    const activeCategories = filterCategory === 'all'
+      ? ['shelter', 'water', 'medical', 'station']
+      : [filterCategory];
+
+    const searchConfigs: { category: string; type: string }[] = activeCategories.flatMap((cat) =>
+      (CATEGORY_TYPES[cat] || []).map((type) => ({ category: cat, type }))
+    );
+
+    if (searchConfigs.length === 0) {
+      setDynamicMarkers([]);
+      return;
     }
 
     const service = new google.maps.places.PlacesService(mapInstanceRef.current);
+    const PlacesStatus = google.maps.places.PlacesServiceStatus;
 
     const searchPromises = searchConfigs.map((cfg) => {
-      return new Promise<any[]>((resolve) => {
+      return new Promise<{ status: string; rows: any[] }>((resolve) => {
         service.nearbySearch(
-          {
-            location: mapCenter,
-            radius: 3000, // 3km radius query
-            type: cfg.type
-          },
+          { location: mapCenter, radius: 3000, type: cfg.type },
           (results: any, status: any) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-              const mapped = results.map((place: any) => {
-                let descSuffix = '';
-                if (cfg.category === 'shelter') {
-                  descSuffix = cfg.type === 'school' ? 'Official designated school shelter.' : 'Open park shelter space.';
-                } else if (cfg.category === 'water') {
-                  descSuffix = cfg.type === 'convenience_store' ? 'Disaster support convenience store.' : 'Emergency water supply node.';
-                } else if (cfg.category === 'medical') {
-                  descSuffix = 'Emergency medical triage station.';
-                } else if (cfg.category === 'station') {
-                  descSuffix = 'Active evacuation transit rail station.';
-                }
-
+            if (status === PlacesStatus.OK && results) {
+              const rows = results.map((place: any) => {
+                const descSuffix =
+                  cfg.category === 'shelter' ? (cfg.type === 'school' ? 'Designated school shelter.' : cfg.type === 'park' ? 'Open park shelter space.' : 'Open civic shelter point.') :
+                  cfg.category === 'water' ? (cfg.type === 'drinking_water' ? 'Public drinking water source.' : 'Emergency water / supply node.') :
+                  cfg.category === 'medical' ? 'Emergency medical / triage station.' :
+                  'Active evacuation transit point.';
                 return {
                   id: place.place_id,
                   category: cfg.category,
@@ -648,9 +644,9 @@ export default function App() {
                   y: 0
                 };
               });
-              resolve(mapped);
+              resolve({ status: 'OK', rows });
             } else {
-              resolve([]);
+              resolve({ status: String(status), rows: [] });
             }
           }
         );
@@ -658,41 +654,31 @@ export default function App() {
     });
 
     Promise.all(searchPromises).then((resultsArray) => {
-      const allMerged = resultsArray.flat();
+      const statusCounts: Record<string, number> = {};
+      const allMerged: any[] = [];
+      resultsArray.forEach((r, i) => {
+        statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
+        if (r.status !== 'OK') {
+          console.warn(`[Places] ${searchConfigs[i].category}/${searchConfigs[i].type} → ${r.status}`);
+        }
+        allMerged.push(...r.rows);
+      });
+      console.info('[Places] query summary', { center: mapCenter, configs: searchConfigs.length, statuses: statusCounts, totalRaw: allMerged.length });
+
       const uniqueMap = new Map();
       allMerged.forEach((item) => {
-        if (!uniqueMap.has(item.id)) {
-          uniqueMap.set(item.id, item);
-        }
+        if (!uniqueMap.has(item.id)) uniqueMap.set(item.id, item);
       });
       const deduplicated = Array.from(uniqueMap.values());
 
-      if (deduplicated.length === 0) {
-        // Fall back gracefully to locationMarkers (offline resilience)
-        const fallback = (locationMarkers[personalContext.location as keyof typeof locationMarkers] || []).map(m => ({
-          ...m,
-          category: m.category === 'hazard' ? 'station' : m.category
-        }));
-
-        const filteredFallback = fallback.filter((m: any) => {
-          const matchesCategory = filterCategory === 'all' || m.category === filterCategory;
-          const matchesSearch = searchQuery === '' || 
-            m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-            m.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            m.category.toLowerCase().includes(searchQuery.toLowerCase());
-          return matchesCategory && matchesSearch;
-        });
-        setDynamicMarkers(filteredFallback);
-      } else {
-        const finalFiltered = deduplicated.filter((m: any) => {
-          if (!searchQuery) return true;
-          return (
-            m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            m.desc.toLowerCase().includes(searchQuery.toLowerCase())
-          );
-        });
-        setDynamicMarkers(finalFiltered);
-      }
+      const final = deduplicated.filter((m: any) => {
+        if (!searchQuery) return true;
+        return (
+          m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          m.desc.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      });
+      setDynamicMarkers(final);
     });
 
   }, [googleMapsLoaded, mapCenter, filterCategory, searchQuery, personalContext.location]);
@@ -765,6 +751,18 @@ export default function App() {
   }, [user, isBypassed]);
 
 
+  // Request real device geolocation once the user has authenticated
+  useEffect(() => {
+    if (!user && !isBypassed) return;
+    let cancelled = false;
+    requestUserPosition().then((pos) => {
+      if (!cancelled && pos) setLivePosition(pos);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, isBypassed]);
+
   // Handle Biometric Bypass Simulation
   const triggerBiometricBypass = () => {
     setShowFaceIdModal(true);
@@ -803,10 +801,12 @@ export default function App() {
   // Translate labels dynamically based on selected language
   const labels = LANGUAGES_MAP[personalContext.language];
 
-  // Dynamic advice synthesis based on context
+  // Dynamic advice synthesis based on context. Prefers live Gemini-generated steps;
+  // falls back to the deterministic template below if Gemini is disabled or hasn't returned yet.
   const getDynamicAdvice = () => {
+    if (liveSteps && liveSteps.length) return liveSteps;
     const { language, floor, companions, mobility } = personalContext;
-    
+
     if (activeHazard === 'earthquake') {
       const steps = [];
       // Step 1: Drop Cover Hold or evac
@@ -897,97 +897,199 @@ export default function App() {
     }
   };
 
-  // Run the multi-agent pipeline simulation
+  // Live multi-agent pipeline. Real Gemini calls when VITE_GEMINI_API_KEY is configured;
+  // otherwise falls back to the original deterministic timeline so the demo still works.
   useEffect(() => {
-    if (!isSimulating) return;
+    if (!isSimulating || currentStep !== 0) return;
 
-    if (currentStep === 0) {
-      // Step 0: Situation Agent starts
-      setAgents(prev => prev.map((a, i) => i === 0 ? { ...a, status: 'running' } : a));
-      const t = setTimeout(() => {
-        setAgents(prev => prev.map((a, i) => i === 0 ? { 
-          ...a, 
-          status: 'completed', 
-          result: activeHazard === 'earthquake' 
-            ? "M7.2 Earthquake detected. Shibuya intensity JMA 5-Upper. Tsunami threat: ADVISORY (0.5m waves expected)." 
-            : activeHazard === 'typhoon'
-            ? "Category 4 Typhoon (Whip) making landfall in Kanto. Sustained winds 140km/h. Heavy rain 50mm/hr."
-            : "M8.4 Subduction Quake. Shibuya intensity JMA 6-Lower. Major Tsunami Warning (Waves 3.2m in 8 mins)."
-        } : a));
+    const runId = ++pipelineRunIdRef.current;
+    let cancelled = false;
+    const cancelTimers: ReturnType<typeof setTimeout>[] = [];
+    const wait = (ms: number) => new Promise<void>((resolve) => {
+      const t = setTimeout(resolve, ms);
+      cancelTimers.push(t);
+    });
+
+    const markRunning = (idx: number) =>
+      setAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'running' } : a));
+    const markCompleted = (idx: number, result: string) =>
+      setAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'completed', result } : a));
+    const stillCurrent = () => !cancelled && runId === pipelineRunIdRef.current;
+
+    const profile = {
+      language: personalContext.language,
+      location: personalContext.location,
+      floor: personalContext.floor,
+      companions: personalContext.companions,
+      mobility: personalContext.mobility
+    };
+
+    const shelterInfo = getShelterInfo(
+      personalContext.location,
+      'English',
+      googleMapsLoaded ? dynamicMarkers : undefined
+    );
+    const shelterDistance = shelterInfo.distance;
+
+    const fallbackSituation =
+      activeHazard === 'earthquake'
+        ? `M7.2 Earthquake detected. ${personalContext.location} intensity JMA 5-Upper. Tsunami threat: ADVISORY (0.5m waves expected).`
+        : activeHazard === 'typhoon'
+        ? `Category 4 Typhoon (Whip) making landfall in Kanto. Sustained winds 140km/h. Heavy rain 50mm/hr near ${personalContext.location}.`
+        : `M8.4 Subduction Quake. ${personalContext.location} intensity JMA 6-Lower. Major Tsunami Warning (Waves 3.2m in 8 mins).`;
+
+    const fallbackSteps: ActionStep[] = [
+      { num: '1', title: 'Drop, Cover, Hold', desc: 'Take immediate protective posture and shield your head from falling debris.' },
+      { num: '2', title: 'Take Stairs, Not Elevator', desc: 'Move calmly through the safest exit, supporting any companions.' },
+      { num: '3', title: `Evacuate to ${shelterInfo.name} (${shelterInfo.distance})`, desc: 'Follow the highlighted route on the map.' }
+    ];
+
+    const run = async () => {
+      try {
+        // ── Step 0: Situation Agent ──
+        markRunning(0);
+        const [signal] = await Promise.all([
+          fetchHazardSignal(activeHazard, personalContext.location),
+          wait(300)
+        ]);
+        if (!stillCurrent()) return;
+        setHazardSignal(signal);
+
+        let situationResult = fallbackSituation;
+        if (isGeminiConfigured) {
+          try {
+            situationResult = await runSituationAgent({
+              hazard: activeHazard,
+              location: personalContext.location,
+              jmaSignal: signal
+            });
+          } catch (e) {
+            console.warn('Situation agent failed; using fallback.', e);
+          }
+        }
+        if (!stillCurrent()) return;
+        markCompleted(0, situationResult);
         setCurrentStep(1);
-      }, 2500);
-      return () => clearTimeout(t);
-    }
 
-    if (currentStep === 1) {
-      // Step 1: Personal Context Agent runs
-      setAgents(prev => prev.map((a, i) => i === 1 ? { ...a, status: 'running' } : a));
-      const t = setTimeout(() => {
-        setAgents(prev => prev.map((a, i) => i === 1 ? { 
-          ...a, 
-          status: 'completed', 
-          result: `User context parsed: Lang: ${personalContext.language}, Location: ${personalContext.location}, Floor: ${personalContext.floor}, Companions: ${personalContext.companions}, Mobility: ${personalContext.mobility}. Vulnerability rating: HIGH.`
-        } : a));
+        // ── Step 1: Personal Context Agent ──
+        markRunning(1);
+        let personalResult = `User context parsed: Lang: ${profile.language}, Location: ${profile.location}, Floor: ${profile.floor}, Companions: ${profile.companions}, Mobility: ${profile.mobility}. Vulnerability rating: HIGH.`;
+        if (isGeminiConfigured) {
+          try {
+            personalResult = await runPersonalAgent(profile);
+          } catch (e) {
+            console.warn('Personal agent failed; using fallback.', e);
+            await wait(800);
+          }
+        } else {
+          await wait(1200);
+        }
+        if (!stillCurrent()) return;
+        markCompleted(1, personalResult);
         setCurrentStep(2);
-      }, 2000);
-      return () => clearTimeout(t);
-    }
 
-    if (currentStep === 2) {
-      // Step 2: Route & Shelter Agent runs
-      setAgents(prev => prev.map((a, i) => i === 2 ? { ...a, status: 'running' } : a));
-      const t = setTimeout(() => {
-        const shelterInfo = getShelterInfo(personalContext.location, 'English', googleMapsLoaded ? dynamicMarkers : undefined);
-        const shelter = `${shelterInfo.name} (${shelterInfo.detail})`;
-        setAgents(prev => prev.map((a, i) => i === 2 ? { 
-          ...a, 
-          status: 'completed', 
-          result: `Closest safe shelter: ${shelter}. Route safe of unreinforced masonry structures. ADA ramps verified.`
-        } : a));
+        // ── Step 2: Route & Shelter Agent (+ generate the actual 3 steps in parallel) ──
+        markRunning(2);
+        let routeResult = `Closest safe shelter: ${shelterInfo.name} (${shelterInfo.detail}). Route avoids unreinforced masonry. ADA ramps verified.`;
+        let stepsPromise: Promise<ActionStep[]> = Promise.resolve(fallbackSteps);
+        if (isGeminiConfigured) {
+          stepsPromise = generateActionSteps({
+            profile,
+            hazard: activeHazard,
+            shelterName: shelterInfo.name,
+            shelterDistance
+          }).catch((e) => {
+            console.warn('Action-step generation failed; using fallback.', e);
+            return fallbackSteps;
+          });
+          try {
+            routeResult = await runRouteAgent({
+              profile,
+              hazard: activeHazard,
+              shelterName: shelterInfo.name,
+              shelterDistance
+            });
+          } catch (e) {
+            console.warn('Route agent failed; using fallback.', e);
+          }
+        } else {
+          await wait(1200);
+        }
+        if (!stillCurrent()) return;
+        markCompleted(2, routeResult);
         setCurrentStep(3);
-      }, 2000);
-      return () => clearTimeout(t);
-    }
 
-    if (currentStep === 3) {
-      // Step 3: Translate & Comms Agent runs
-      setAgents(prev => prev.map((a, i) => i === 3 ? { ...a, status: 'running' } : a));
-      const t = setTimeout(() => {
-        setAgents(prev => prev.map((a, i) => i === 3 ? { 
-          ...a, 
-          status: 'completed', 
-          result: `Draft text generated in ${personalContext.language}. Emergency contact parsed. Human validation required.`
-        } : a));
+        // ── Step 3: Translate & Comms Agent (+ generate SMS in parallel) ──
+        markRunning(3);
+        const trackerUrl = `https://saferoute.ai/t/${personalContext.location.slice(0, 4).toLowerCase()}`;
+        let translateResult = `Draft text generated in ${profile.language}. Emergency contact parsed. Human validation required.`;
+        let smsPromise: Promise<string> = Promise.resolve('');
+        if (isGeminiConfigured) {
+          smsPromise = generateSmsDraft({
+            profile,
+            hazard: activeHazard,
+            shelterName: shelterInfo.name,
+            trackerUrl
+          }).catch((e) => {
+            console.warn('SMS draft failed; using fallback.', e);
+            return '';
+          });
+          try {
+            translateResult = await runTranslateAgent(profile);
+          } catch (e) {
+            console.warn('Translate agent failed; using fallback.', e);
+          }
+        } else {
+          await wait(1200);
+        }
+        if (!stillCurrent()) return;
+        markCompleted(3, translateResult);
         setCurrentStep(4);
-      }, 2000);
-      return () => clearTimeout(t);
-    }
 
-    if (currentStep === 4) {
-      // Step 4: Commander Agent synthesizes final command cards
-      setAgents(prev => prev.map((a, i) => i === 4 ? { ...a, status: 'running' } : a));
-      const t = setTimeout(() => {
-        setAgents(prev => prev.map((a, i) => i === 4 ? { 
-          ...a, 
-          status: 'completed', 
-          result: `Command list compiled with 3 hyper-personalized steps in ${personalContext.language}. Layout dispatched.`
-        } : a));
+        // ── Step 4: Commander Agent (+ resolve steps + SMS) ──
+        markRunning(4);
+        const [steps, sms, commanderText] = await Promise.all([
+          stepsPromise,
+          smsPromise,
+          isGeminiConfigured
+            ? runCommanderAgent(profile, activeHazard).catch((e) => {
+                console.warn('Commander agent failed; using fallback.', e);
+                return `Command list compiled with 3 hyper-personalized steps in ${profile.language}. Layout dispatched.`;
+              })
+            : Promise.resolve(`Command list compiled with 3 hyper-personalized steps in ${profile.language}. Layout dispatched.`)
+        ]);
+        if (!stillCurrent()) return;
+        setLiveSteps(steps && steps.length ? steps : fallbackSteps);
+        if (sms) setLiveSmsDraft(sms);
+        markCompleted(4, commanderText);
         setIsSimulating(false);
-        setShowSmsModal(true); // Pop open the approval gate at the very end
-      }, 2000);
-      return () => clearTimeout(t);
-    }
+        setShowSmsModal(true);
+      } catch (err) {
+        console.error('Pipeline failed unexpectedly', err);
+        if (!stillCurrent()) return;
+        setIsSimulating(false);
+      }
+    };
 
-  }, [isSimulating, currentStep, activeHazard, personalContext]);
+    run();
+
+    return () => {
+      cancelled = true;
+      cancelTimers.forEach(clearTimeout);
+    };
+  }, [isSimulating, currentStep, activeHazard, personalContext, googleMapsLoaded, dynamicMarkers]);
 
   // Restart simulation
   const handleTriggerAlert = () => {
-    // Reset agent statuses
+    // Reset agent statuses + any cached live model output
     setAgents(prev => prev.map(a => ({ ...a, status: 'idle', result: '' })));
+    setHazardSignal(null);
+    setLiveSteps(null);
+    setLiveSmsDraft(null);
     setSmsStatus('idle');
     setShowSmsModal(false);
-    setIsSimulating(true);
     setCurrentStep(0);
+    setIsSimulating(true);
   };
 
   const handleApproveSms = () => {
@@ -1000,8 +1102,9 @@ export default function App() {
     }, 1500);
   };
 
-  // Get the drafted message text
+  // Get the drafted message text. Prefers live Gemini draft when available.
   const getDraftedSmsText = () => {
+    if (liveSmsDraft && liveSmsDraft.trim().length > 0) return liveSmsDraft;
     const lang = personalContext.language;
     const loc = personalContext.location;
     const floorClean = personalContext.floor.replace(' Floor', '');
@@ -1811,12 +1914,16 @@ export default function App() {
                           <AlertTriangle className="w-3.5 h-3.5 animate-bounce" />
                           {activeHazard === 'earthquake' ? '気象庁 地震緊急警報 (JMA)' : activeHazard === 'typhoon' ? '特別台風警報 (JMA)' : '大津波警報発表 (JMA)'}
                         </span>
-                        <span className="text-[9px] font-mono tracking-wider">LIVE DATA</span>
+                        <span className="text-[9px] font-mono tracking-wider">
+                          {hazardSignal ? hazardSignal.source : 'AWAITING FEED'}
+                        </span>
                       </div>
                       <div className="p-3 text-[11px] font-mono leading-relaxed select-text">
-                        {activeHazard === 'earthquake' && "千葉県東方沖でマグニチュード7.2の強い地震発生。東京都渋谷区で強い揺れ（震度5強以上）に警戒してください。"}
-                        {activeHazard === 'typhoon' && "非常に強い台風が関東地方に接近。渋谷区周辺で最大風速140km/hに達する見込み。不要不急の外出を控えてください。"}
-                        {activeHazard === 'tsunami' && "渋谷区沿岸低地等に危険到達。津波予想高3.2m。直ちに高台や避難ビルなどの安全な場所へ避難を開始してください。"}
+                        {hazardSignal
+                          ? hazardSignal.bulletinJa
+                          : activeHazard === 'earthquake' ? '気象庁の地震速報を取得しています…'
+                          : activeHazard === 'typhoon' ? '気象庁の台風情報を取得しています…'
+                          : '気象庁の津波警報を取得しています…'}
                       </div>
                     </div>
                   )}

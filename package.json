@@ -12,6 +12,7 @@
     "deploy:run": "gcloud run deploy disaster-copilot --source . --allow-unauthenticated --region us-central1"
   },
   "dependencies": {
+    "@google/genai": "^2.10.0",
     "lucide-react": "^1.21.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
