@@ -372,7 +372,7 @@ export default function App() {
       }
     }
 
-  }, [googleMapsLoaded, personalContext.location, filterCategory, searchQuery, activeMarker, mapLayer, currentStep]);
+  }, [googleMapsLoaded, personalContext.location, filterCategory, searchQuery, activeMarker, mapLayer, currentStep, user, isBypassed]);
 
   // Handle Credential Response from Google Sign-In
   const handleCredentialResponse = (response: any) => {
