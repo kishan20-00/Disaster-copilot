@@ -1,0 +1,26 @@
+# .gcloudignore
+# This file specifies files to be ignored by gcloud commands.
+
+# Ignore git and github metadata
+.git/
+.github/
+
+# Ignore node_modules
+node_modules/
+
+# Ignore local build outputs if we want to compile on Cloud Build
+dist/
+
+# Do NOT ignore .env for Cloud Build so Vite can inject keys at build time
+!.env
+
+# Ignore other local IDE and system files
+.vscode/
+.idea/
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
