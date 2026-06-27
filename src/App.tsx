@@ -245,23 +245,25 @@ const locationMarkers = {
 };
 
 // Helper to get shelter information dynamically without hardcoding
-const getShelterInfo = (location: string, language: string) => {
-  const markers = locationMarkers[location as keyof typeof locationMarkers] || [];
+const getShelterInfo = (location: string, language: string, dynamicShelters?: any[]) => {
+  const markers = (dynamicShelters && dynamicShelters.length > 0)
+    ? dynamicShelters
+    : (locationMarkers[location as keyof typeof locationMarkers] || []);
   const shelter = markers.find(m => m.category === 'shelter') as any;
   if (!shelter) {
     return { name: 'Emergency Shelter', distance: '400m', detail: 'Open shelter', fullName: 'Emergency Shelter', desc: '' };
   }
 
-  let name = shelter.shortName;
-  if (language === 'Japanese') name = shelter.shortNameJa;
-  else if (language === 'Chinese') name = shelter.shortNameZh;
-  else if (language === 'Vietnamese') name = shelter.shortNameVi;
+  let name = shelter.shortName || shelter.name;
+  if (language === 'Japanese') name = shelter.shortNameJa || shelter.name;
+  else if (language === 'Chinese') name = shelter.shortNameZh || shelter.name;
+  else if (language === 'Vietnamese') name = shelter.shortNameVi || shelter.name;
 
   return {
-    name: name || shelter.shortName,
+    name: name || shelter.shortName || shelter.name,
     fullName: shelter.name,
-    distance: shelter.distance,
-    detail: shelter.detailDesc,
+    distance: shelter.distance || '350m',
+    detail: shelter.detailDesc || shelter.desc || 'Designated Shelter',
     desc: shelter.desc
   };
 };
@@ -311,12 +313,18 @@ export default function App() {
 
   // Google Maps styles and interactive state
   const [mapLayer, setMapLayer] = useState<'streets' | 'satellite' | 'terrain' | 'traffic' | 'hazard'>('streets');
-  const [filterCategory, setFilterCategory] = useState<'all' | 'shelter' | 'water' | 'medical' | 'hazard'>('all');
+  const [filterCategory, setFilterCategory] = useState<'all' | 'shelter' | 'water' | 'medical' | 'station'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMarker, setActiveMarker] = useState<string | null>(null);
   const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
   const [voiceAssistant, setVoiceAssistant] = useState(false);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
+
+  // Dynamic Google Places API States & Refs
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [dynamicMarkers, setDynamicMarkers] = useState<any[]>([]);
+  const lastLocationRef = useRef<string>('');
+  const infoWindowRef = useRef<any>(null);
 
   // Real Google Maps API Integration States & Refs
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
@@ -392,15 +400,43 @@ export default function App() {
           { featureType: "water", elementType: "geometry", stylers: [{ color: "#090d16" }] }
         ]
       });
+
+      // Unified InfoWindow instance
+      infoWindowRef.current = new google.maps.InfoWindow();
+
+      // Listen for map idle to update dynamic query center coordinates
+      mapInstanceRef.current.addListener('idle', () => {
+        const currentCenter = mapInstanceRef.current.getCenter();
+        if (currentCenter) {
+          setMapCenter({ lat: currentCenter.lat(), lng: currentCenter.lng() });
+        }
+      });
+
+      // Clear selection on clicking map
+      mapInstanceRef.current.addListener('click', () => {
+        if (infoWindowRef.current) {
+          infoWindowRef.current.close();
+        }
+        setActiveMarker(null);
+      });
+
       // Force Google Maps to recalculate container boundaries and center after the DOM paints
       setTimeout(() => {
         if (mapInstanceRef.current) {
           google.maps.event.trigger(mapInstanceRef.current, 'resize');
           mapInstanceRef.current.setCenter(center);
+          setMapCenter(center);
         }
       }, 150);
-    } else {
-      mapInstanceRef.current.setCenter(center);
+    }
+
+    // Centering trigger when user swaps target municipalities in setup
+    if (lastLocationRef.current !== personalContext.location) {
+      lastLocationRef.current = personalContext.location;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.setCenter(center);
+        setMapCenter(center);
+      }
     }
 
     // 2. Clear existing Google Map markers
@@ -408,22 +444,15 @@ export default function App() {
     googleMarkersRef.current = [];
 
     // 3. Create current category & search-filtered markers
-    const currentMarkers = (locationMarkers[personalContext.location] || []).filter((m: any) => {
-      const matchesCategory = filterCategory === 'all' || m.category === filterCategory;
-      const matchesSearch = searchQuery === '' || 
-        m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        m.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        m.category.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    });
+    const markersToDraw = googleMapsLoaded ? dynamicMarkers : (locationMarkers[personalContext.location] || []);
 
-    currentMarkers.forEach((markerData: any) => {
+    markersToDraw.forEach((markerData: any) => {
       const color = {
         shelter: '#10b981',
         water: '#0ea5e9',
         medical: '#a855f7',
-        hazard: '#ef4444'
-      }[markerData.category as 'shelter' | 'water' | 'medical' | 'hazard'] || '#38bdf8';
+        station: '#f59e0b'
+      }[markerData.category as 'shelter' | 'water' | 'medical' | 'station'] || '#38bdf8';
 
       // SVG path custom pin symbol for Google Maps
       const pinSymbol = {
@@ -445,6 +474,22 @@ export default function App() {
 
       marker.addListener('click', () => {
         setActiveMarker(markerData.id);
+
+        if (infoWindowRef.current) {
+          const contentString = `
+            <div style="font-family: system-ui, -apple-system, sans-serif; padding: 10px 14px; max-width: 240px; background: #0f172a; color: #f1f5f9; border-radius: 12px; border: 1px solid #1e293b; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <span style="font-size: 15px; display: inline-block;">
+                  ${markerData.category === 'shelter' ? '🏥' : markerData.category === 'water' ? '⛲' : markerData.category === 'medical' ? '🩹' : '🚉'}
+                </span>
+                <strong style="font-size: 12.5px; color: #ffffff; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 800;">${markerData.name}</strong>
+              </div>
+              <p style="margin: 0; font-size: 10px; color: #94a3b8; line-height: 1.5; font-family: monospace;">${markerData.desc}</p>
+            </div>
+          `;
+          infoWindowRef.current.setContent(contentString);
+          infoWindowRef.current.open(mapInstanceRef.current, marker);
+        }
       });
 
       googleMarkersRef.current.push(marker);
@@ -498,7 +543,9 @@ export default function App() {
     }
 
     if (currentStep >= 0) {
-      const shelterData = (locationMarkers[personalContext.location] || []).find((m: any) => m.category === 'shelter');
+      const shelterData = googleMapsLoaded
+        ? dynamicMarkers.find((m: any) => m.category === 'shelter')
+        : (locationMarkers[personalContext.location] || []).find((m: any) => m.category === 'shelter');
       if (shelterData && userPos) {
         let pathCoords = [userPos];
         if (personalContext.location === 'Shibuya') {
@@ -529,7 +576,126 @@ export default function App() {
       }
     }
 
-  }, [googleMapsLoaded, personalContext.location, filterCategory, searchQuery, activeMarker, mapLayer, currentStep, user, isBypassed]);
+  }, [googleMapsLoaded, personalContext.location, dynamicMarkers, mapLayer, currentStep, user, isBypassed]);
+
+  // Dynamic Google Places API Fetching and Syncing
+  useEffect(() => {
+    if (!googleMapsLoaded || !mapInstanceRef.current || !mapCenter || typeof google === 'undefined' || !google.maps || !google.maps.places) return;
+
+    let searchConfigs: { category: string; type: string }[] = [];
+
+    if (filterCategory === 'shelter') {
+      searchConfigs = [
+        { category: 'shelter', type: 'school' },
+        { category: 'shelter', type: 'park' }
+      ];
+    } else if (filterCategory === 'water') {
+      searchConfigs = [
+        { category: 'water', type: 'convenience_store' },
+        { category: 'water', type: 'supermarket' }
+      ];
+    } else if (filterCategory === 'medical') {
+      searchConfigs = [
+        { category: 'medical', type: 'hospital' },
+        { category: 'medical', type: 'pharmacy' }
+      ];
+    } else if (filterCategory === 'station') {
+      searchConfigs = [
+        { category: 'station', type: 'transit_station' }
+      ];
+    } else { // 'all'
+      searchConfigs = [
+        { category: 'shelter', type: 'school' },
+        { category: 'shelter', type: 'park' },
+        { category: 'water', type: 'convenience_store' },
+        { category: 'medical', type: 'hospital' },
+        { category: 'station', type: 'transit_station' }
+      ];
+    }
+
+    const service = new google.maps.places.PlacesService(mapInstanceRef.current);
+
+    const searchPromises = searchConfigs.map((cfg) => {
+      return new Promise<any[]>((resolve) => {
+        service.nearbySearch(
+          {
+            location: mapCenter,
+            radius: 3000, // 3km radius query
+            type: cfg.type
+          },
+          (results: any, status: any) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+              const mapped = results.map((place: any) => {
+                let descSuffix = '';
+                if (cfg.category === 'shelter') {
+                  descSuffix = cfg.type === 'school' ? 'Official designated school shelter.' : 'Open park shelter space.';
+                } else if (cfg.category === 'water') {
+                  descSuffix = cfg.type === 'convenience_store' ? 'Disaster support convenience store.' : 'Emergency water supply node.';
+                } else if (cfg.category === 'medical') {
+                  descSuffix = 'Emergency medical triage station.';
+                } else if (cfg.category === 'station') {
+                  descSuffix = 'Active evacuation transit rail station.';
+                }
+
+                return {
+                  id: place.place_id,
+                  category: cfg.category,
+                  name: place.name,
+                  lat: place.geometry.location.lat(),
+                  lng: place.geometry.location.lng(),
+                  desc: `${place.vicinity || 'Tokyo, Japan'}. ${descSuffix}`,
+                  x: 0,
+                  y: 0
+                };
+              });
+              resolve(mapped);
+            } else {
+              resolve([]);
+            }
+          }
+        );
+      });
+    });
+
+    Promise.all(searchPromises).then((resultsArray) => {
+      const allMerged = resultsArray.flat();
+      const uniqueMap = new Map();
+      allMerged.forEach((item) => {
+        if (!uniqueMap.has(item.id)) {
+          uniqueMap.set(item.id, item);
+        }
+      });
+      const deduplicated = Array.from(uniqueMap.values());
+
+      if (deduplicated.length === 0) {
+        // Fall back gracefully to locationMarkers (offline resilience)
+        const fallback = (locationMarkers[personalContext.location as keyof typeof locationMarkers] || []).map(m => ({
+          ...m,
+          category: m.category === 'hazard' ? 'station' : m.category
+        }));
+
+        const filteredFallback = fallback.filter((m: any) => {
+          const matchesCategory = filterCategory === 'all' || m.category === filterCategory;
+          const matchesSearch = searchQuery === '' || 
+            m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+            m.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.category.toLowerCase().includes(searchQuery.toLowerCase());
+          return matchesCategory && matchesSearch;
+        });
+        setDynamicMarkers(filteredFallback);
+      } else {
+        const finalFiltered = deduplicated.filter((m: any) => {
+          if (!searchQuery) return true;
+          return (
+            m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.desc.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+        });
+        setDynamicMarkers(finalFiltered);
+      }
+    });
+
+  }, [googleMapsLoaded, mapCenter, filterCategory, searchQuery, personalContext.location]);
 
   // Handle Credential Response from Google Sign-In
   const handleCredentialResponse = (response: any) => {
@@ -676,7 +842,7 @@ export default function App() {
       });
 
       // Step 3: Route
-      const shelterInfo = getShelterInfo(personalContext.location, language);
+      const shelterInfo = getShelterInfo(personalContext.location, language, googleMapsLoaded ? dynamicMarkers : undefined);
       const shelter = `${shelterInfo.name} (${shelterInfo.distance})`;
       steps.push({
         num: "3",
@@ -771,7 +937,7 @@ export default function App() {
       // Step 2: Route & Shelter Agent runs
       setAgents(prev => prev.map((a, i) => i === 2 ? { ...a, status: 'running' } : a));
       const t = setTimeout(() => {
-        const shelterInfo = getShelterInfo(personalContext.location, 'English');
+        const shelterInfo = getShelterInfo(personalContext.location, 'English', googleMapsLoaded ? dynamicMarkers : undefined);
         const shelter = `${shelterInfo.name} (${shelterInfo.detail})`;
         setAgents(prev => prev.map((a, i) => i === 2 ? { 
           ...a, 
@@ -854,7 +1020,7 @@ export default function App() {
     };
 
     const locName = (localizedLocMap[loc] && localizedLocMap[loc][lang]) || loc;
-    const shelterName = getShelterInfo(loc, lang).name;
+    const shelterName = getShelterInfo(loc, lang, googleMapsLoaded ? dynamicMarkers : undefined).name;
     const trackerUrl = trackerUrlMap[loc] || 'https://saferoute.ai/t/shib';
 
     if (activeHazard === 'earthquake') {
@@ -1323,7 +1489,7 @@ export default function App() {
                   { id: 'shelter', label: 'Shelters', emoji: '🏥' },
                   { id: 'water', label: 'Water', emoji: '⛲' },
                   { id: 'medical', label: 'Medical', emoji: '🩹' },
-                  { id: 'hazard', label: 'Hazards', emoji: '🚧' }
+                  { id: 'station', label: 'Stations', emoji: '🚉' }
                 ].map((chip) => {
                   const isActive = filterCategory === chip.id;
                   return (
@@ -1427,7 +1593,8 @@ export default function App() {
 
             {/* SELECTION POPUP INFO CARD OVER MAP */}
             {activeMarker && (() => {
-              const marker = (locationMarkers[personalContext.location] || []).find((m: any) => m.id === activeMarker);
+              const markersList = googleMapsLoaded ? dynamicMarkers : (locationMarkers[personalContext.location] || []);
+              const marker = markersList.find((m: any) => m.id === activeMarker);
               if (!marker) return null;
               const isShelter = marker.category === 'shelter';
               return (
@@ -1435,7 +1602,7 @@ export default function App() {
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs">
-                        {marker.category === 'shelter' ? '🏥' : marker.category === 'water' ? '⛲' : marker.category === 'medical' ? '🩹' : '🚧'}
+                        {marker.category === 'shelter' ? '🏥' : marker.category === 'water' ? '⛲' : marker.category === 'medical' ? '🩹' : '🚉'}
                       </span>
                       <h4 className="text-[11.5px] font-black text-slate-100 font-sans tracking-wide uppercase">{marker.name}</h4>
                     </div>
@@ -1491,7 +1658,7 @@ export default function App() {
                     <div className="flex flex-col">
                       <span className="text-xs font-black tracking-tight text-white font-sans uppercase">
                         {currentStep >= 4 
-                          ? `${getShelterInfo(personalContext.location, 'English').name} Safe Route`
+                          ? `${getShelterInfo(personalContext.location, 'English', googleMapsLoaded ? dynamicMarkers : undefined).name} Safe Route`
                           : currentStep >= 0 
                           ? '📡 Analyzing active safety route...'
                           : '🟢 SafeRoute AI Active'}
