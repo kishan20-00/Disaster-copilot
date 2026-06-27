@@ -1,5 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
 import {
+  generateActionSteps,
+  generateSmsDraft,
+  isGeminiConfigured,
+  runCommanderAgent,
+  runPersonalAgent,
+  runRouteAgent,
+  runSituationAgent,
+  runTranslateAgent
+} from './services/gemini';
+import type { ActionStep, HazardSignal } from './services/gemini';
+import { fetchHazardSignal } from './services/jma';
+import { getCityFallback, requestUserPosition } from './services/geolocation';
+import type { LatLng } from './services/geolocation';
+import { findNearestShelter, getWalkingRoute, reverseGeocode } from './services/maps';
+import type { WalkingRoute } from './services/maps';
+import {
   Shield,
   Activity,
   Users,
@@ -10,7 +26,6 @@ import {
   Play,
   RotateCcw,
   Smartphone,
-  Settings,
   Compass,
   CheckCircle2,
   MessageSquare,
@@ -90,23 +105,182 @@ const LANGUAGES_MAP = {
 
 const locationMarkers = {
   Shibuya: [
-    { id: 'shibuya-shelter', category: 'shelter', name: 'Miyashita Park Shelter', x: 252, y: 345, lat: 35.6617, lng: 139.7020, desc: 'Elevated open-air park. Capacity: 5,000. ADA Access verified.' },
+    { 
+      id: 'shibuya-shelter', 
+      category: 'shelter', 
+      name: 'Miyashita Park Shelter', 
+      shortName: 'Miyashita Park',
+      shortNameJa: '宮下公園',
+      shortNameZh: '宫下公园',
+      shortNameVi: 'Công viên Miyashita',
+      distance: '400m',
+      detailDesc: 'Open, elevated shelter, 400m, ADA compliant path available',
+      x: 252, y: 345, 
+      lat: 35.6617, lng: 139.7020, 
+      desc: 'Elevated open-air park. Capacity: 5,000. ADA Access verified.' 
+    },
+    { 
+      id: 'shibuya-shelter-2', 
+      category: 'shelter', 
+      name: 'Yoyogi Gym Refuge', 
+      shortName: 'Yoyogi Gym',
+      shortNameJa: '代々木体育館',
+      shortNameZh: '代代木体育馆',
+      shortNameVi: 'Nhà thi đấu Yoyogi',
+      distance: '750m',
+      detailDesc: 'Indoor heavy structure, 750m',
+      x: 50, y: 150, 
+      lat: 35.6631, lng: 139.6975, 
+      desc: 'Reinforced seismic dome structure. Capacity: 10,000.' 
+    },
+    { 
+      id: 'shibuya-shelter-3', 
+      category: 'shelter', 
+      name: 'Jingu-mae Shelter', 
+      shortName: 'Jingu-mae Shelter',
+      shortNameJa: '神宮前避難所',
+      shortNameZh: '神宫前避难所',
+      shortNameVi: 'Khu trú ẩn Jingu-mae',
+      distance: '620m',
+      detailDesc: 'Outdoor park space, 620m',
+      x: 310, y: 450, 
+      lat: 35.6590, lng: 139.7060, 
+      desc: 'Local community assembly ground. Basic emergency kit.' 
+    },
     { id: 'shibuya-water', category: 'water', name: 'Shibuya Well Station', x: 120, y: 320, lat: 35.6585, lng: 139.6975, desc: 'Solar-powered ground aquifer water tap. Active.' },
+    { id: 'shibuya-water-2', category: 'water', name: 'South Shibuya Supply Gate', x: 200, y: 600, lat: 35.6545, lng: 139.7010, desc: 'Backup underground municipal water cistern. High volume.' },
+    { id: 'shibuya-water-3', category: 'water', name: 'Harajuku Reservoir Node', x: 80, y: 220, lat: 35.6610, lng: 139.6950, desc: 'Clean gravity-fed fresh-water distribution post.' },
     { id: 'shibuya-medical', category: 'medical', name: 'Shibuya Triage Center', x: 280, y: 550, lat: 35.6558, lng: 139.7040, desc: 'First aid, blankets, and local network routing.' },
-    { id: 'shibuya-hazard', category: 'hazard', name: 'Fallen Glass Hazard', x: 100, y: 450, lat: 35.6575, lng: 139.6995, desc: 'Shattered facade glass. Blocked road.' }
+    { id: 'shibuya-medical-2', category: 'medical', name: 'Shibuya West Clinic Outpost', x: 160, y: 380, lat: 35.6598, lng: 139.6990, desc: 'Volunteer physician group. Wound care & basic triage.' },
+    { id: 'shibuya-hazard', category: 'hazard', name: 'Fallen Glass Hazard', x: 100, y: 450, lat: 35.6575, lng: 139.6995, desc: 'Shattered facade glass. Blocked road.' },
+    { id: 'shibuya-hazard-2', category: 'hazard', name: 'Fallen Signage Blockage', x: 220, y: 280, lat: 35.6630, lng: 139.7035, desc: 'Commercial steel sign fallen across pedestrian path.' }
   ],
   Minato: [
-    { id: 'minato-shelter', category: 'shelter', name: 'Shiba Park Shelter', x: 210, y: 390, lat: 35.6556, lng: 139.7483, desc: 'Large open-ground shelter near Tokyo Tower. Capacity: 8,000.' },
+    { 
+      id: 'minato-shelter', 
+      category: 'shelter', 
+      name: 'Shiba Park Shelter', 
+      shortName: 'Shiba Park',
+      shortNameJa: '芝公園',
+      shortNameZh: '芝公园',
+      shortNameVi: 'Công viên Shiba',
+      distance: '650m',
+      detailDesc: 'Open, 650m',
+      x: 210, y: 390, 
+      lat: 35.6556, lng: 139.7483, 
+      desc: 'Large open-ground shelter near Tokyo Tower. Capacity: 8,000.' 
+    },
+    { 
+      id: 'minato-shelter-2', 
+      category: 'shelter', 
+      name: 'Akasaka Sacas Refuge', 
+      shortName: 'Akasaka Sacas',
+      shortNameJa: '赤坂サカス',
+      shortNameZh: '赤坂Sacas',
+      shortNameVi: 'Refuge Akasaka Sacas',
+      distance: '900m',
+      detailDesc: 'High concrete plaza, 900m',
+      x: 80, y: 480, 
+      lat: 35.6580, lng: 139.7350, 
+      desc: 'High-elevation open concrete square. Tsunami resilient.' 
+    },
+    { 
+      id: 'minato-shelter-3', 
+      category: 'shelter', 
+      name: 'Sports Center Refuge', 
+      shortName: 'Sports Center',
+      shortNameJa: '港区スポーツセンター',
+      shortNameZh: '港区体育中心',
+      shortNameVi: 'Trung tâm Thể thao',
+      distance: '1.2km',
+      detailDesc: 'Indoor shelter, 1.2km',
+      x: 320, y: 320, 
+      lat: 35.6515, lng: 139.7540, 
+      desc: 'Emergency backup food, blankets, and blankets warehouse.' 
+    },
     { id: 'minato-water', category: 'water', name: 'Tokyo Tower Water Reservoir', x: 100, y: 250, lat: 35.6586, lng: 139.7454, desc: 'Underground emergency fresh-water supply.' },
+    { id: 'minato-water-2', category: 'water', name: 'Mita Water Reserve Gate', x: 260, y: 580, lat: 35.6495, lng: 139.7480, desc: 'Automated high-capacity groundwater pumping station.' },
+    { id: 'minato-water-3', category: 'water', name: 'Roppongi Hills Water Point', x: 150, y: 420, lat: 35.6540, lng: 139.7410, desc: 'Earthquake-safe storage reservoir with manual distribution lines.' },
     { id: 'minato-medical', category: 'medical', name: 'Roppongi Medical Clinic', x: 290, y: 520, lat: 35.6620, lng: 139.7330, desc: 'Triage team active. Emergency generator operational.' },
-    { id: 'minato-hazard', category: 'hazard', name: 'Structural Risk: Overpass', x: 150, y: 580, lat: 35.6530, lng: 139.7420, desc: 'Highway structural cracks. High risk area.' }
+    { id: 'minato-medical-2', category: 'medical', name: 'Toranomon First Aid Outpost', x: 180, y: 300, lat: 35.6595, lng: 139.7440, desc: 'Red Cross disaster caravan. Clean bandages and sutures.' },
+    { id: 'minato-hazard', category: 'hazard', name: 'Structural Risk: Overpass', x: 150, y: 580, lat: 35.6530, lng: 139.7420, desc: 'Highway structural cracks. High risk area.' },
+    { id: 'minato-hazard-2', category: 'hazard', name: 'Fallen Concrete Panel', x: 230, y: 200, lat: 35.6610, lng: 139.7490, desc: 'Masonry facade panel fallen onto active vehicle lane.' }
   ],
   Shinjuku: [
-    { id: 'shinjuku-shelter', category: 'shelter', name: 'Shinjuku Gyoen Shelter', x: 250, y: 490, lat: 35.6852, lng: 139.7095, desc: 'Massive open park refuge. Capacity: 25,000. Windbreak forest.' },
+    { 
+      id: 'shinjuku-shelter', 
+      category: 'shelter', 
+      name: 'Shinjuku Gyoen Shelter', 
+      shortName: 'Shinjuku Gyoen',
+      shortNameJa: '新宿御苑',
+      shortNameZh: '新宿御苑',
+      shortNameVi: 'Công viên Shinjuku Gyoen',
+      distance: '800m',
+      detailDesc: 'Open, 800m',
+      x: 250, y: 490, 
+      lat: 35.6852, lng: 139.7095, 
+      desc: 'Massive open park refuge. Capacity: 25,000. Windbreak forest.' 
+    },
+    { 
+      id: 'shinjuku-shelter-2', 
+      category: 'shelter', 
+      name: 'Shinjuku Chuo Park', 
+      shortName: 'Chuo Park',
+      shortNameJa: '新宿中央公園',
+      shortNameZh: '新宿中央公园',
+      shortNameVi: 'Công viên Shinjuku Chuo',
+      distance: '950m',
+      detailDesc: 'Open park, 950m',
+      x: 120, y: 220, 
+      lat: 35.6945, lng: 139.6910, 
+      desc: 'Multi-level open park. Hydrant connections and local radio.' 
+    },
+    { 
+      id: 'shinjuku-shelter-3', 
+      category: 'shelter', 
+      name: 'Toyama Park Shelter', 
+      shortName: 'Toyama Park',
+      shortNameJa: '戸山公園',
+      shortNameZh: '户山公园',
+      shortNameVi: 'Công viên Toyama',
+      distance: '1.4km',
+      detailDesc: 'Wooded park, 1.4km',
+      x: 340, y: 400, 
+      lat: 35.7010, lng: 139.7150, 
+      desc: 'Hilly open-space refuge area. Stocked water storage.' 
+    },
     { id: 'shinjuku-water', category: 'water', name: 'Gyoen Water Station', x: 300, y: 310, lat: 35.6880, lng: 139.7130, desc: 'Clean groundwater well with manual pumps.' },
+    { id: 'shinjuku-water-2', category: 'water', name: 'West Shinjuku Supply Node', x: 80, y: 480, lat: 35.6870, lng: 139.6890, desc: 'Solar-powered smart municipal water tap station.' },
+    { id: 'shinjuku-water-3', category: 'water', name: 'Kabukicho Well Station', x: 190, y: 150, lat: 35.6960, lng: 139.7010, desc: 'Deep-aquifer borehole well. Active under local generator power.' },
     { id: 'shinjuku-medical', category: 'medical', name: 'Shinjuku First Aid Tent', x: 110, y: 420, lat: 35.6895, lng: 139.6990, desc: 'Red Cross outpost. Medical supplies stocked.' },
-    { id: 'shinjuku-hazard', category: 'hazard', name: 'Subway Flooding', x: 190, y: 200, lat: 35.6905, lng: 139.7040, desc: 'Underground tunnel ingress. Closed.' }
+    { id: 'shinjuku-medical-2', category: 'medical', name: 'Gyoen Gate Triage Station', x: 240, y: 580, lat: 35.6840, lng: 139.7110, desc: 'Mobile first aid clinic stationed near the Gyoen entrance.' },
+    { id: 'shinjuku-hazard', category: 'hazard', name: 'Subway Flooding', x: 190, y: 200, lat: 35.6905, lng: 139.7040, desc: 'Underground tunnel ingress. Closed.' },
+    { id: 'shinjuku-hazard-2', category: 'hazard', name: 'Gyoen Perimeter Slope Failure', x: 280, y: 450, lat: 35.6865, lng: 139.7125, desc: 'Slope landslide risk. Retaining brick wall collapsed.' }
   ]
+};
+
+// Helper to get shelter information dynamically without hardcoding
+const getShelterInfo = (location: string, language: string, dynamicShelters?: any[]) => {
+  const markers = (dynamicShelters && dynamicShelters.length > 0)
+    ? dynamicShelters
+    : (locationMarkers[location as keyof typeof locationMarkers] || []);
+  const shelter = markers.find(m => m.category === 'shelter') as any;
+  if (!shelter) {
+    return { name: 'Emergency Shelter', distance: '400m', detail: 'Open shelter', fullName: 'Emergency Shelter', desc: '' };
+  }
+
+  let name = shelter.shortName || shelter.name;
+  if (language === 'Japanese') name = shelter.shortNameJa || shelter.name;
+  else if (language === 'Chinese') name = shelter.shortNameZh || shelter.name;
+  else if (language === 'Vietnamese') name = shelter.shortNameVi || shelter.name;
+
+  return {
+    name: name || shelter.shortName || shelter.name,
+    fullName: shelter.name,
+    distance: shelter.distance || '350m',
+    detail: shelter.detailDesc || shelter.desc || 'Designated Shelter',
+    desc: shelter.desc
+  };
 };
 
 // Helper to parse JWT from Google Identity Services token without external packages
@@ -154,12 +328,28 @@ export default function App() {
 
   // Google Maps styles and interactive state
   const [mapLayer, setMapLayer] = useState<'streets' | 'satellite' | 'terrain' | 'traffic' | 'hazard'>('streets');
-  const [filterCategory, setFilterCategory] = useState<'all' | 'shelter' | 'water' | 'medical' | 'hazard'>('all');
+  const [filterCategory, setFilterCategory] = useState<'all' | 'shelter' | 'water' | 'medical' | 'station'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMarker, setActiveMarker] = useState<string | null>(null);
   const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
   const [voiceAssistant, setVoiceAssistant] = useState(false);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
+
+  // Dynamic Google Places API States & Refs
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [dynamicMarkers, setDynamicMarkers] = useState<any[]>([]);
+  const lastLocationRef = useRef<string>('');
+  const infoWindowRef = useRef<any>(null);
+
+  // Live, model-generated state (replaces hardcoded JMA bulletins, evac steps, SMS draft, user pin)
+  const [hazardSignal, setHazardSignal] = useState<HazardSignal | null>(null);
+  const [liveSteps, setLiveSteps] = useState<ActionStep[] | null>(null);
+  const [liveSmsDraft, setLiveSmsDraft] = useState<string | null>(null);
+  const [livePosition, setLivePosition] = useState<LatLng | null>(null);
+  const [liveAddress, setLiveAddress] = useState<string | null>(null);
+  const [liveRoute, setLiveRoute] = useState<WalkingRoute | null>(null);
+  const [liveShelter, setLiveShelter] = useState<{ name: string; distanceMeters: number; lat: number; lng: number } | null>(null);
+  const pipelineRunIdRef = useRef(0);
 
   // Real Google Maps API Integration States & Refs
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
@@ -235,15 +425,43 @@ export default function App() {
           { featureType: "water", elementType: "geometry", stylers: [{ color: "#090d16" }] }
         ]
       });
+
+      // Unified InfoWindow instance
+      infoWindowRef.current = new google.maps.InfoWindow();
+
+      // Listen for map idle to update dynamic query center coordinates
+      mapInstanceRef.current.addListener('idle', () => {
+        const currentCenter = mapInstanceRef.current.getCenter();
+        if (currentCenter) {
+          setMapCenter({ lat: currentCenter.lat(), lng: currentCenter.lng() });
+        }
+      });
+
+      // Clear selection on clicking map
+      mapInstanceRef.current.addListener('click', () => {
+        if (infoWindowRef.current) {
+          infoWindowRef.current.close();
+        }
+        setActiveMarker(null);
+      });
+
       // Force Google Maps to recalculate container boundaries and center after the DOM paints
       setTimeout(() => {
         if (mapInstanceRef.current) {
           google.maps.event.trigger(mapInstanceRef.current, 'resize');
           mapInstanceRef.current.setCenter(center);
+          setMapCenter(center);
         }
       }, 150);
-    } else {
-      mapInstanceRef.current.setCenter(center);
+    }
+
+    // Centering trigger when user swaps target municipalities in setup
+    if (lastLocationRef.current !== personalContext.location) {
+      lastLocationRef.current = personalContext.location;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.setCenter(center);
+        setMapCenter(center);
+      }
     }
 
     // 2. Clear existing Google Map markers
@@ -251,22 +469,15 @@ export default function App() {
     googleMarkersRef.current = [];
 
     // 3. Create current category & search-filtered markers
-    const currentMarkers = (locationMarkers[personalContext.location] || []).filter((m: any) => {
-      const matchesCategory = filterCategory === 'all' || m.category === filterCategory;
-      const matchesSearch = searchQuery === '' || 
-        m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        m.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        m.category.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    });
+    const markersToDraw = googleMapsLoaded ? dynamicMarkers : (locationMarkers[personalContext.location] || []);
 
-    currentMarkers.forEach((markerData: any) => {
+    markersToDraw.forEach((markerData: any) => {
       const color = {
         shelter: '#10b981',
         water: '#0ea5e9',
         medical: '#a855f7',
-        hazard: '#ef4444'
-      }[markerData.category as 'shelter' | 'water' | 'medical' | 'hazard'] || '#38bdf8';
+        station: '#f59e0b'
+      }[markerData.category as 'shelter' | 'water' | 'medical' | 'station'] || '#38bdf8';
 
       // SVG path custom pin symbol for Google Maps
       const pinSymbol = {
@@ -288,18 +499,29 @@ export default function App() {
 
       marker.addListener('click', () => {
         setActiveMarker(markerData.id);
+
+        if (infoWindowRef.current) {
+          const contentString = `
+            <div style="font-family: system-ui, -apple-system, sans-serif; padding: 10px 14px; max-width: 240px; background: #0f172a; color: #f1f5f9; border-radius: 12px; border: 1px solid #1e293b; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <span style="font-size: 15px; display: inline-block;">
+                  ${markerData.category === 'shelter' ? '🏥' : markerData.category === 'water' ? '⛲' : markerData.category === 'medical' ? '🩹' : '🚉'}
+                </span>
+                <strong style="font-size: 12.5px; color: #ffffff; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 800;">${markerData.name}</strong>
+              </div>
+              <p style="margin: 0; font-size: 10px; color: #94a3b8; line-height: 1.5; font-family: monospace;">${markerData.desc}</p>
+            </div>
+          `;
+          infoWindowRef.current.setContent(contentString);
+          infoWindowRef.current.open(mapInstanceRef.current, marker);
+        }
       });
 
       googleMarkersRef.current.push(marker);
     });
 
     // 4. Place current user position pin (Blue pulsing core dot)
-    const userPositions = {
-      Shibuya: { lat: 35.6565, lng: 139.7000 },
-      Minato: { lat: 35.6595, lng: 139.7390 },
-      Shinjuku: { lat: 35.6882, lng: 139.7015 }
-    };
-    const userPos = userPositions[personalContext.location];
+    const userPos = livePosition ?? getCityFallback(personalContext.location);
     if (userPos) {
       const userMarker = new google.maps.Marker({
         position: userPos,
@@ -341,21 +563,18 @@ export default function App() {
     }
 
     if (currentStep >= 0) {
-      const shelterData = (locationMarkers[personalContext.location] || []).find((m: any) => m.category === 'shelter');
-      if (shelterData && userPos) {
-        let pathCoords = [userPos];
-        if (personalContext.location === 'Shibuya') {
-          pathCoords.push({ lat: 35.6580, lng: 139.7000 });
-          pathCoords.push({ lat: 35.6600, lng: 139.7020 });
-        } else if (personalContext.location === 'Minato') {
-          pathCoords.push({ lat: 35.6575, lng: 139.7420 });
-          pathCoords.push({ lat: 35.6565, lng: 139.7450 });
-        } else if (personalContext.location === 'Shinjuku') {
-          pathCoords.push({ lat: 35.6865, lng: 139.7050 });
-          pathCoords.push({ lat: 35.6852, lng: 139.7080 });
+      // Prefer the REAL Google Directions polyline; fall back to a straight line to the shelter.
+      let pathCoords: { lat: number; lng: number }[] | null = null;
+      if (liveRoute && liveRoute.path.length > 1) {
+        pathCoords = liveRoute.path;
+      } else {
+        const shelterData = liveShelter || dynamicMarkers.find((m: any) => m.category === 'shelter');
+        if (shelterData && userPos) {
+          pathCoords = [userPos, { lat: shelterData.lat, lng: shelterData.lng }];
         }
-        pathCoords.push({ lat: shelterData.lat, lng: shelterData.lng });
+      }
 
+      if (pathCoords && pathCoords.length) {
         routePolylineRef.current = new google.maps.Polyline({
           path: pathCoords,
           geodesic: true,
@@ -364,15 +583,89 @@ export default function App() {
           strokeWeight: 5,
           map: mapInstanceRef.current
         });
-
-        // Fit bounds to fit the route on screen smoothly
         const bounds = new google.maps.LatLngBounds();
-        pathCoords.forEach(coord => bounds.extend(coord));
+        pathCoords.forEach((coord) => bounds.extend(coord));
         mapInstanceRef.current.fitBounds(bounds);
       }
     }
 
-  }, [googleMapsLoaded, personalContext.location, filterCategory, searchQuery, activeMarker, mapLayer, currentStep, user, isBypassed]);
+  }, [googleMapsLoaded, personalContext.location, dynamicMarkers, mapLayer, currentStep, user, isBypassed, livePosition, liveRoute, liveShelter]);
+
+  // Dynamic Places API (New) fetcher — uses google.maps.places.Place.searchNearby.
+  // Requires "Places API (New)" enabled in Google Cloud Console.
+  useEffect(() => {
+    if (!googleMapsLoaded || !mapCenter || typeof google === 'undefined' || !google.maps?.places?.Place) return;
+
+    const CATEGORY_TYPES: Record<string, string[]> = {
+      shelter: ['school', 'park', 'stadium', 'university', 'city_hall', 'gym'],
+      water: ['convenience_store', 'supermarket', 'gas_station'],
+      medical: ['hospital', 'pharmacy', 'doctor'],
+      station: ['transit_station', 'subway_station', 'train_station', 'bus_station']
+    };
+
+    const activeCategories: string[] = filterCategory === 'all'
+      ? ['shelter', 'water', 'medical', 'station']
+      : [filterCategory];
+
+    const { Place, SearchNearbyRankPreference } = google.maps.places as any;
+
+    const searches = activeCategories.map(async (cat) => {
+      try {
+        const res = await Place.searchNearby({
+          fields: ['id', 'displayName', 'location', 'formattedAddress', 'types'],
+          locationRestriction: { center: mapCenter, radius: 3000 },
+          includedPrimaryTypes: CATEGORY_TYPES[cat],
+          maxResultCount: 20,
+          rankPreference: SearchNearbyRankPreference?.DISTANCE
+        });
+        const places = res?.places ?? [];
+        return places.map((p: any) => {
+          const loc = p.location;
+          const lat = typeof loc?.lat === 'function' ? loc.lat() : loc?.lat;
+          const lng = typeof loc?.lng === 'function' ? loc.lng() : loc?.lng;
+          const name = typeof p.displayName === 'string' ? p.displayName : (p.displayName?.text ?? 'Unknown');
+          const descSuffix =
+            cat === 'shelter' ? 'Designated shelter point.' :
+            cat === 'water' ? 'Emergency water / supply node.' :
+            cat === 'medical' ? 'Emergency medical / triage point.' :
+            'Active evacuation transit point.';
+          return {
+            id: p.id,
+            category: cat,
+            name,
+            lat,
+            lng,
+            desc: `${p.formattedAddress || 'Tokyo, Japan'}. ${descSuffix}`,
+            x: 0,
+            y: 0
+          };
+        });
+      } catch (err) {
+        console.warn(`[Places-New] ${cat} failed`, err);
+        return [] as any[];
+      }
+    });
+
+    Promise.all(searches).then((arrays) => {
+      const merged = arrays.flat();
+      const uniqueMap = new Map<string, any>();
+      merged.forEach((item) => {
+        if (item.id && !uniqueMap.has(item.id)) uniqueMap.set(item.id, item);
+      });
+      const deduplicated = Array.from(uniqueMap.values());
+      console.info('[Places-New] result', { categories: activeCategories.length, total: deduplicated.length });
+
+      const final = deduplicated.filter((m: any) => {
+        if (!searchQuery) return true;
+        return (
+          (m.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (m.desc || '').toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      });
+      setDynamicMarkers(final);
+    });
+
+  }, [googleMapsLoaded, mapCenter, filterCategory, searchQuery, personalContext.location]);
 
   // Handle Credential Response from Google Sign-In
   const handleCredentialResponse = (response: any) => {
@@ -442,6 +735,55 @@ export default function App() {
   }, [user, isBypassed]);
 
 
+  // Request real device geolocation once the user has authenticated
+  useEffect(() => {
+    if (!user && !isBypassed) return;
+    let cancelled = false;
+    requestUserPosition().then((pos) => {
+      if (!cancelled && pos) setLivePosition(pos);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, isBypassed]);
+
+  // Reverse-geocode the live position into a human-readable address
+  useEffect(() => {
+    if (!googleMapsLoaded || !livePosition) return;
+    let cancelled = false;
+    reverseGeocode(livePosition).then((addr) => {
+      if (!cancelled && addr) setLiveAddress(addr);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [googleMapsLoaded, livePosition]);
+
+  // Auto-detect display language from the browser on first mount
+  useEffect(() => {
+    const tag = (navigator.language || 'en').toLowerCase();
+    const detected: PersonalContext['language'] =
+      tag.startsWith('ja') ? 'Japanese' :
+      tag.startsWith('zh') ? 'Chinese' :
+      tag.startsWith('vi') ? 'Vietnamese' :
+      'English';
+    setPersonalContext((prev) => prev.language === detected ? prev : { ...prev, language: detected });
+  }, []);
+
+  // Auto-detect the user's Tokyo ward from the GPS-resolved address
+  useEffect(() => {
+    if (!liveAddress) return;
+    const lower = liveAddress.toLowerCase();
+    const ward: PersonalContext['location'] | null =
+      lower.includes('shibuya') ? 'Shibuya' :
+      lower.includes('shinjuku') ? 'Shinjuku' :
+      lower.includes('minato') ? 'Minato' :
+      null;
+    if (ward) {
+      setPersonalContext((prev) => prev.location === ward ? prev : { ...prev, location: ward });
+    }
+  }, [liveAddress]);
+
   // Handle Biometric Bypass Simulation
   const triggerBiometricBypass = () => {
     setShowFaceIdModal(true);
@@ -480,10 +822,12 @@ export default function App() {
   // Translate labels dynamically based on selected language
   const labels = LANGUAGES_MAP[personalContext.language];
 
-  // Dynamic advice synthesis based on context
+  // Dynamic advice synthesis based on context. Prefers live Gemini-generated steps;
+  // falls back to the deterministic template below if Gemini is disabled or hasn't returned yet.
   const getDynamicAdvice = () => {
+    if (liveSteps && liveSteps.length) return liveSteps;
     const { language, floor, companions, mobility } = personalContext;
-    
+
     if (activeHazard === 'earthquake') {
       const steps = [];
       // Step 1: Drop Cover Hold or evac
@@ -519,7 +863,8 @@ export default function App() {
       });
 
       // Step 3: Route
-      const shelter = personalContext.location === 'Shibuya' ? 'Miyashita Park (400m)' : personalContext.location === 'Minato' ? 'Shiba Park (650m)' : 'Shinjuku Gyoen (800m)';
+      const shelterInfo = getShelterInfo(personalContext.location, language, googleMapsLoaded ? dynamicMarkers : undefined);
+      const shelter = `${shelterInfo.name} (${shelterInfo.distance})`;
       steps.push({
         num: "3",
         title: language === 'English' ? `Evacuate to ${shelter}` : language === 'Chinese' ? `前往 ${shelter} 避难` : language === 'Vietnamese' ? `Sơ tán đến ${shelter}` : `${shelter} へ避難`,
@@ -573,96 +918,241 @@ export default function App() {
     }
   };
 
-  // Run the multi-agent pipeline simulation
+  // Live multi-agent pipeline. Real Gemini calls when VITE_GEMINI_API_KEY is configured;
+  // otherwise falls back to the original deterministic timeline so the demo still works.
   useEffect(() => {
-    if (!isSimulating) return;
+    if (!isSimulating || currentStep !== 0) return;
 
-    if (currentStep === 0) {
-      // Step 0: Situation Agent starts
-      setAgents(prev => prev.map((a, i) => i === 0 ? { ...a, status: 'running' } : a));
-      const t = setTimeout(() => {
-        setAgents(prev => prev.map((a, i) => i === 0 ? { 
-          ...a, 
-          status: 'completed', 
-          result: activeHazard === 'earthquake' 
-            ? "M7.2 Earthquake detected. Shibuya intensity JMA 5-Upper. Tsunami threat: ADVISORY (0.5m waves expected)." 
-            : activeHazard === 'typhoon'
-            ? "Category 4 Typhoon (Whip) making landfall in Kanto. Sustained winds 140km/h. Heavy rain 50mm/hr."
-            : "M8.4 Subduction Quake. Shibuya intensity JMA 6-Lower. Major Tsunami Warning (Waves 3.2m in 8 mins)."
-        } : a));
+    const runId = ++pipelineRunIdRef.current;
+    let cancelled = false;
+    const cancelTimers: ReturnType<typeof setTimeout>[] = [];
+    const wait = (ms: number) => new Promise<void>((resolve) => {
+      const t = setTimeout(resolve, ms);
+      cancelTimers.push(t);
+    });
+
+    const markRunning = (idx: number) =>
+      setAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'running' } : a));
+    const markCompleted = (idx: number, result: string) =>
+      setAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'completed', result } : a));
+    const stillCurrent = () => !cancelled && runId === pipelineRunIdRef.current;
+
+    const profile = {
+      language: personalContext.language,
+      location: personalContext.location,
+      floor: personalContext.floor,
+      companions: personalContext.companions,
+      mobility: personalContext.mobility
+    };
+
+    // Pick the nearest shelter from real Places results (falls back to city-center logic if Places empty)
+    const originPos = livePosition ?? getCityFallback(personalContext.location);
+    const nearest = findNearestShelter(originPos, dynamicMarkers);
+    const fallbackShelterInfo = getShelterInfo(personalContext.location, 'English', googleMapsLoaded ? dynamicMarkers : undefined);
+    const shelterInfo = nearest
+      ? {
+          name: nearest.name,
+          fullName: nearest.name,
+          distance: nearest.distanceMeters < 1000
+            ? `${Math.round(nearest.distanceMeters)}m`
+            : `${(nearest.distanceMeters / 1000).toFixed(1)}km`,
+          detail: nearest.desc || 'Nearest designated shelter (from Google Places).',
+          desc: nearest.desc || ''
+        }
+      : fallbackShelterInfo;
+    const shelterDistance = shelterInfo.distance;
+    const shelterPos = nearest ? { lat: nearest.lat, lng: nearest.lng } : null;
+
+    const fallbackSituation =
+      activeHazard === 'earthquake'
+        ? `M7.2 Earthquake detected. ${personalContext.location} intensity JMA 5-Upper. Tsunami threat: ADVISORY (0.5m waves expected).`
+        : activeHazard === 'typhoon'
+        ? `Category 4 Typhoon (Whip) making landfall in Kanto. Sustained winds 140km/h. Heavy rain 50mm/hr near ${personalContext.location}.`
+        : `M8.4 Subduction Quake. ${personalContext.location} intensity JMA 6-Lower. Major Tsunami Warning (Waves 3.2m in 8 mins).`;
+
+    const fallbackSteps: ActionStep[] = [
+      { num: '1', title: 'Drop, Cover, Hold', desc: 'Take immediate protective posture and shield your head from falling debris.' },
+      { num: '2', title: 'Take Stairs, Not Elevator', desc: 'Move calmly through the safest exit, supporting any companions.' },
+      { num: '3', title: `Evacuate to ${shelterInfo.name} (${shelterInfo.distance})`, desc: 'Follow the highlighted route on the map.' }
+    ];
+
+    const run = async () => {
+      try {
+        // ── Step 0: Situation Agent ──
+        markRunning(0);
+        const [signal] = await Promise.all([
+          fetchHazardSignal(activeHazard, personalContext.location),
+          wait(300)
+        ]);
+        if (!stillCurrent()) return;
+        setHazardSignal(signal);
+
+        let situationResult = fallbackSituation;
+        if (isGeminiConfigured) {
+          try {
+            situationResult = await runSituationAgent({
+              hazard: activeHazard,
+              location: personalContext.location,
+              jmaSignal: signal
+            });
+          } catch (e) {
+            console.warn('Situation agent failed; using fallback.', e);
+          }
+        }
+        if (!stillCurrent()) return;
+        markCompleted(0, situationResult);
         setCurrentStep(1);
-      }, 2500);
-      return () => clearTimeout(t);
-    }
 
-    if (currentStep === 1) {
-      // Step 1: Personal Context Agent runs
-      setAgents(prev => prev.map((a, i) => i === 1 ? { ...a, status: 'running' } : a));
-      const t = setTimeout(() => {
-        setAgents(prev => prev.map((a, i) => i === 1 ? { 
-          ...a, 
-          status: 'completed', 
-          result: `User context parsed: Lang: ${personalContext.language}, Location: ${personalContext.location}, Floor: ${personalContext.floor}, Companions: ${personalContext.companions}, Mobility: ${personalContext.mobility}. Vulnerability rating: HIGH.`
-        } : a));
+        // ── Step 1: Personal Context Agent (resolves real address) ──
+        markRunning(1);
+        let address: string | null = liveAddress;
+        if (!address && livePosition) {
+          address = await reverseGeocode(livePosition);
+          if (address) setLiveAddress(address);
+        }
+        let personalResult = address
+          ? `User at "${address}" — ${profile.floor}, ${profile.companions}, ${profile.mobility}. Vulnerability rating: HIGH.`
+          : `User context parsed: Lang: ${profile.language}, Location: ${profile.location}, Floor: ${profile.floor}, Companions: ${profile.companions}, Mobility: ${profile.mobility}. Vulnerability rating: HIGH.`;
+        if (isGeminiConfigured) {
+          try {
+            personalResult = await runPersonalAgent(profile, address);
+          } catch (e) {
+            console.warn('Personal agent failed; using fallback.', e);
+            await wait(600);
+          }
+        } else {
+          await wait(1000);
+        }
+        if (!stillCurrent()) return;
+        markCompleted(1, personalResult);
         setCurrentStep(2);
-      }, 2000);
-      return () => clearTimeout(t);
-    }
 
-    if (currentStep === 2) {
-      // Step 2: Route & Shelter Agent runs
-      setAgents(prev => prev.map((a, i) => i === 2 ? { ...a, status: 'running' } : a));
-      const t = setTimeout(() => {
-        const shelter = personalContext.location === 'Shibuya' ? 'Miyashita Park (Open, elevated shelter, 400m, ADA compliant path available)' : personalContext.location === 'Minato' ? 'Shiba Park (Open, 650m)' : 'Shinjuku Gyoen (Open, 800m)';
-        setAgents(prev => prev.map((a, i) => i === 2 ? { 
-          ...a, 
-          status: 'completed', 
-          result: `Closest safe shelter: ${shelter}. Route safe of unreinforced masonry structures. ADA ramps verified.`
-        } : a));
+        // ── Step 2: Route & Shelter Agent (fetches REAL walking directions) ──
+        markRunning(2);
+        let walkingRoute: WalkingRoute | null = null;
+        if (shelterPos && googleMapsLoaded) {
+          walkingRoute = await getWalkingRoute(originPos, shelterPos);
+          if (walkingRoute) {
+            setLiveRoute(walkingRoute);
+            setLiveShelter({
+              name: shelterInfo.name,
+              distanceMeters: walkingRoute.distanceMeters,
+              lat: shelterPos.lat,
+              lng: shelterPos.lng
+            });
+          }
+        }
+
+        const realDist = walkingRoute?.distanceText;
+        const realEta = walkingRoute?.durationText;
+        let routeResult = walkingRoute
+          ? `Nearest shelter: ${shelterInfo.name}. Walking ${realDist}, ETA ${realEta} via Google Directions. Path avoids highway segments.`
+          : `Closest safe shelter: ${shelterInfo.name} (${shelterInfo.detail}). Route validated.`;
+        let stepsPromise: Promise<ActionStep[]> = Promise.resolve(fallbackSteps);
+        if (isGeminiConfigured) {
+          stepsPromise = generateActionSteps({
+            profile,
+            hazard: activeHazard,
+            shelterName: shelterInfo.name,
+            shelterDistance,
+            walkingDuration: realEta,
+            address
+          }).catch((e) => {
+            console.warn('Action-step generation failed; using fallback.', e);
+            return fallbackSteps;
+          });
+          try {
+            routeResult = await runRouteAgent({
+              profile,
+              hazard: activeHazard,
+              shelterName: shelterInfo.name,
+              shelterDistance,
+              walkingDistance: realDist,
+              walkingDuration: realEta
+            });
+          } catch (e) {
+            console.warn('Route agent failed; using fallback.', e);
+          }
+        } else {
+          await wait(1000);
+        }
+        if (!stillCurrent()) return;
+        markCompleted(2, routeResult);
         setCurrentStep(3);
-      }, 2000);
-      return () => clearTimeout(t);
-    }
 
-    if (currentStep === 3) {
-      // Step 3: Translate & Comms Agent runs
-      setAgents(prev => prev.map((a, i) => i === 3 ? { ...a, status: 'running' } : a));
-      const t = setTimeout(() => {
-        setAgents(prev => prev.map((a, i) => i === 3 ? { 
-          ...a, 
-          status: 'completed', 
-          result: `Draft text generated in ${personalContext.language}. Emergency contact parsed. Human validation required.`
-        } : a));
+        // ── Step 3: Translate & Comms Agent (+ generate SMS in parallel) ──
+        markRunning(3);
+        const trackerUrl = `https://saferoute.ai/t/${personalContext.location.slice(0, 4).toLowerCase()}`;
+        let translateResult = `Draft text generated in ${profile.language}. Emergency contact parsed. Human validation required.`;
+        let smsPromise: Promise<string> = Promise.resolve('');
+        if (isGeminiConfigured) {
+          smsPromise = generateSmsDraft({
+            profile,
+            hazard: activeHazard,
+            shelterName: shelterInfo.name,
+            trackerUrl
+          }).catch((e) => {
+            console.warn('SMS draft failed; using fallback.', e);
+            return '';
+          });
+          try {
+            translateResult = await runTranslateAgent(profile);
+          } catch (e) {
+            console.warn('Translate agent failed; using fallback.', e);
+          }
+        } else {
+          await wait(1200);
+        }
+        if (!stillCurrent()) return;
+        markCompleted(3, translateResult);
         setCurrentStep(4);
-      }, 2000);
-      return () => clearTimeout(t);
-    }
 
-    if (currentStep === 4) {
-      // Step 4: Commander Agent synthesizes final command cards
-      setAgents(prev => prev.map((a, i) => i === 4 ? { ...a, status: 'running' } : a));
-      const t = setTimeout(() => {
-        setAgents(prev => prev.map((a, i) => i === 4 ? { 
-          ...a, 
-          status: 'completed', 
-          result: `Command list compiled with 3 hyper-personalized steps in ${personalContext.language}. Layout dispatched.`
-        } : a));
+        // ── Step 4: Commander Agent (+ resolve steps + SMS) ──
+        markRunning(4);
+        const [steps, sms, commanderText] = await Promise.all([
+          stepsPromise,
+          smsPromise,
+          isGeminiConfigured
+            ? runCommanderAgent(profile, activeHazard).catch((e) => {
+                console.warn('Commander agent failed; using fallback.', e);
+                return `Command list compiled with 3 hyper-personalized steps in ${profile.language}. Layout dispatched.`;
+              })
+            : Promise.resolve(`Command list compiled with 3 hyper-personalized steps in ${profile.language}. Layout dispatched.`)
+        ]);
+        if (!stillCurrent()) return;
+        setLiveSteps(steps && steps.length ? steps : fallbackSteps);
+        if (sms) setLiveSmsDraft(sms);
+        markCompleted(4, commanderText);
         setIsSimulating(false);
-        setShowSmsModal(true); // Pop open the approval gate at the very end
-      }, 2000);
-      return () => clearTimeout(t);
-    }
+        setShowSmsModal(true);
+      } catch (err) {
+        console.error('Pipeline failed unexpectedly', err);
+        if (!stillCurrent()) return;
+        setIsSimulating(false);
+      }
+    };
 
-  }, [isSimulating, currentStep, activeHazard, personalContext]);
+    run();
+
+    return () => {
+      cancelled = true;
+      cancelTimers.forEach(clearTimeout);
+    };
+  }, [isSimulating, currentStep, activeHazard, personalContext, googleMapsLoaded, dynamicMarkers]);
 
   // Restart simulation
   const handleTriggerAlert = () => {
-    // Reset agent statuses
+    // Reset agent statuses + any cached live model output
     setAgents(prev => prev.map(a => ({ ...a, status: 'idle', result: '' })));
+    setHazardSignal(null);
+    setLiveSteps(null);
+    setLiveSmsDraft(null);
+    setLiveRoute(null);
+    setLiveShelter(null);
     setSmsStatus('idle');
     setShowSmsModal(false);
-    setIsSimulating(true);
     setCurrentStep(0);
+    setIsSimulating(true);
   };
 
   const handleApproveSms = () => {
@@ -675,24 +1165,63 @@ export default function App() {
     }, 1500);
   };
 
-  // Get the drafted message text
+  // Get the drafted message text. Prefers live Gemini draft when available.
   const getDraftedSmsText = () => {
+    if (liveSmsDraft && liveSmsDraft.trim().length > 0) return liveSmsDraft;
     const lang = personalContext.language;
+    const loc = personalContext.location;
+    const floorClean = personalContext.floor.replace(' Floor', '');
+    
+    // Dynamic localization maps
+    const localizedLocMap: Record<string, Record<string, string>> = {
+      Shibuya: { English: 'Shibuya', Chinese: '涉谷', Vietnamese: 'Shibuya', Japanese: '渋谷' },
+      Minato: { English: 'Minato', Chinese: '港区', Vietnamese: 'Minato', Japanese: '港区' },
+      Shinjuku: { English: 'Shinjuku', Chinese: '新宿', Vietnamese: 'Shinjuku', Japanese: '新宿' }
+    };
+    
+    const trackerUrlMap: Record<string, string> = {
+      Shibuya: 'https://saferoute.ai/t/shib',
+      Minato: 'https://saferoute.ai/t/mina',
+      Shinjuku: 'https://saferoute.ai/t/shinj'
+    };
+
+    const locName = (localizedLocMap[loc] && localizedLocMap[loc][lang]) || loc;
+    const shelterName = getShelterInfo(loc, lang, googleMapsLoaded ? dynamicMarkers : undefined).name;
+    const trackerUrl = trackerUrlMap[loc] || 'https://saferoute.ai/t/shib';
+
     if (activeHazard === 'earthquake') {
-      if (lang === 'English') return `Alert: Strong quake in Shibuya. We're safe (floor ${personalContext.floor.replace(' Floor', '')}, with child). Heading to Miyashita Park. Tracker: https://saferoute.ai/t/shib`;
-      if (lang === 'Chinese') return `警告：涉谷发生强震。我们安全（位于${personalContext.floor}，带孩子）。正撤往宫下公园。追踪链接: https://saferoute.ai/t/shib`;
-      if (lang === 'Vietnamese') return `Cảnh báo: Động đất mạnh ở Shibuya. Chúng tôi ổn (tầng ${personalContext.floor.replace(' Floor', '')}, đi cùng con nhỏ). Đang tới Công viên Miyashita. Bản đồ: https://saferoute.ai/t/shib`;
-      return `【緊急連絡】渋谷で強い地震。無事です（${personalContext.floor}階・子供同伴）。宮下公園へ移動します。現在地：https://saferoute.ai/t/shib`;
+      if (lang === 'English') {
+        return `Alert: Strong quake in ${locName}. We're safe (floor ${floorClean}, with child). Heading to ${shelterName}. Tracker: ${trackerUrl}`;
+      }
+      if (lang === 'Chinese') {
+        return `警告：${locName}发生强震。我们安全（位于${personalContext.floor}，带孩子）。正撤往${shelterName}。追踪链接: ${trackerUrl}`;
+      }
+      if (lang === 'Vietnamese') {
+        return `Cảnh báo: Động chất mạnh ở ${locName}. Chúng tôi ổn (tầng ${floorClean}, đi cùng con nhỏ). Đang tới ${shelterName}. Bản đồ: ${trackerUrl}`;
+      }
+      return `【緊急連絡】${locName}で強い地震。無事です（${personalContext.floor}・子供同伴）。${shelterName}へ移動します。現在地：${trackerUrl}`;
     } else if (activeHazard === 'typhoon') {
-      if (lang === 'English') return `Alert: Category 4 Typhoon in Tokyo. Staying inside on floor ${personalContext.floor.replace(' Floor', '')}. Secured. Track: https://saferoute.ai/t/shib`;
-      if (lang === 'Chinese') return `警告：台风4级登陆东京。我们在${personalContext.floor}室内避险。一切安好。追踪: https://saferoute.ai/t/shib`;
-      if (lang === 'Vietnamese') return `Cảnh báo: Bão Cấp 4 ở Tokyo. Đang trú ẩn ở tầng ${personalContext.floor.replace(' Floor', '')}. An toàn. Định vị: https://saferoute.ai/t/shib`;
-      return `【緊急連絡】大型台風接近中。安全に${personalContext.floor}階に留まっています。無事です。GPS：https://saferoute.ai/t/shib`;
+      if (lang === 'English') {
+        return `Alert: Category 4 Typhoon in Tokyo. Staying inside on floor ${floorClean}. Secured. Track: ${trackerUrl}`;
+      }
+      if (lang === 'Chinese') {
+        return `警告：台风4级登陆东京。我们在${personalContext.floor}室内避险。一切安好。追踪: ${trackerUrl}`;
+      }
+      if (lang === 'Vietnamese') {
+        return `Cảnh báo: Bão Cấp 4 ở Tokyo. Đang trú ẩn ở tầng ${floorClean}. An toàn. Định vị: ${trackerUrl}`;
+      }
+      return `【緊急連絡】大型台風接近中。安全に${personalContext.floor}に留まっています。無事です。GPS：${trackerUrl}`;
     } else {
-      if (lang === 'English') return `Alert: Major Tsunami Warning! Evacuating to safe vertical height. Position: Shibuya. Track: https://saferoute.ai/t/shib`;
-      if (lang === 'Chinese') return `紧急警报：大海啸预警！我们正前往高处垂直避难。涩谷。追踪: https://saferoute.ai/t/shib`;
-      if (lang === 'Vietnamese') return `Cảnh báo khẩn: Sóng thần lớn! Đang sơ tán lên vùng cao an toàn. Shibuya. Định vị: https://saferoute.ai/t/shib`;
-      return `【大津波警報】津波から避難するため、高台へ向かっています。現在地：渋谷。URL: https://saferoute.ai/t/shib`;
+      if (lang === 'English') {
+        return `Alert: Major Tsunami Warning! Evacuating to safe vertical height. Position: ${locName}. Track: ${trackerUrl}`;
+      }
+      if (lang === 'Chinese') {
+        return `紧急警报：大海啸预警！我们正前往高处垂直避难。${locName}。追踪: ${trackerUrl}`;
+      }
+      if (lang === 'Vietnamese') {
+        return `Cảnh báo khẩn: Sóng thần lớn! Đang sơ tán lên vùng cao an toàn. ${locName}. Định vị: ${trackerUrl}`;
+      }
+      return `【大津波警報】津波から避難するため、高台へ向かっています。現在地：${locName}。URL: ${trackerUrl}`;
     }
   };
 
@@ -1126,7 +1655,7 @@ export default function App() {
                   { id: 'shelter', label: 'Shelters', emoji: '🏥' },
                   { id: 'water', label: 'Water', emoji: '⛲' },
                   { id: 'medical', label: 'Medical', emoji: '🩹' },
-                  { id: 'hazard', label: 'Hazards', emoji: '🚧' }
+                  { id: 'station', label: 'Stations', emoji: '🚉' }
                 ].map((chip) => {
                   const isActive = filterCategory === chip.id;
                   return (
@@ -1230,7 +1759,8 @@ export default function App() {
 
             {/* SELECTION POPUP INFO CARD OVER MAP */}
             {activeMarker && (() => {
-              const marker = (locationMarkers[personalContext.location] || []).find((m: any) => m.id === activeMarker);
+              const markersList = googleMapsLoaded ? dynamicMarkers : (locationMarkers[personalContext.location] || []);
+              const marker = markersList.find((m: any) => m.id === activeMarker);
               if (!marker) return null;
               const isShelter = marker.category === 'shelter';
               return (
@@ -1238,7 +1768,7 @@ export default function App() {
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs">
-                        {marker.category === 'shelter' ? '🏥' : marker.category === 'water' ? '⛲' : marker.category === 'medical' ? '🩹' : '🚧'}
+                        {marker.category === 'shelter' ? '🏥' : marker.category === 'water' ? '⛲' : marker.category === 'medical' ? '🩹' : '🚉'}
                       </span>
                       <h4 className="text-[11.5px] font-black text-slate-100 font-sans tracking-wide uppercase">{marker.name}</h4>
                     </div>
@@ -1294,7 +1824,7 @@ export default function App() {
                     <div className="flex flex-col">
                       <span className="text-xs font-black tracking-tight text-white font-sans uppercase">
                         {currentStep >= 4 
-                          ? (personalContext.location === 'Shibuya' ? 'Miyashita Park Safe Route' : personalContext.location === 'Minato' ? 'Shiba Park Safe Route' : 'Shinjuku Gyoen Safe Route')
+                          ? `${getShelterInfo(personalContext.location, 'English', googleMapsLoaded ? dynamicMarkers : undefined).name} Safe Route`
                           : currentStep >= 0 
                           ? '📡 Analyzing active safety route...'
                           : '🟢 SafeRoute AI Active'}
@@ -1337,96 +1867,77 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* CONFIGURATION / SELECTORS CARD */}
-                  <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3.5 space-y-3">
+                  {/* LIVE TELEMETRY CARD — real GPS + nearest shelter + walking ETA */}
+                  <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3.5 space-y-2">
                     <div className="flex items-center gap-1.5 text-slate-300 pb-1.5 border-b border-slate-900/60">
-                      <Settings className="w-4 h-4 text-slate-400" />
-                      <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans">Disaster Context Setup</span>
+                      <Navigation className="w-4 h-4 text-emerald-400" />
+                      <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans">Live Telemetry</span>
+                      <span className="ml-auto text-[9px] font-mono uppercase text-slate-500">
+                        {livePosition ? 'GPS LOCKED' : 'AWAITING GPS'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-1.5 text-[10.5px] font-mono">
+                      <div className="flex items-start gap-1.5">
+                        <MapPin className="w-3 h-3 text-indigo-400 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">You are at</span>
+                          <p className="text-slate-200 leading-snug break-words">
+                            {liveAddress || (livePosition
+                              ? `${livePosition.lat.toFixed(5)}, ${livePosition.lng.toFixed(5)}`
+                              : 'Acquiring device location…')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <Shield className="w-3 h-3 text-emerald-400 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">Nearest shelter</span>
+                          <p className="text-slate-200 leading-snug break-words">
+                            {liveShelter
+                              ? `${liveShelter.name}`
+                              : (dynamicMarkers.find((m: any) => m.category === 'shelter')?.name || 'Awaiting Places data…')}
+                          </p>
+                        </div>
+                      </div>
+                      {liveRoute && (
+                        <div className="flex items-start gap-1.5">
+                          <Compass className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">Walking route</span>
+                            <p className="text-slate-200 leading-snug">
+                              {liveRoute.distanceText} · ETA {liveRoute.durationText}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2.5 text-[10.5px]">
-                      <div>
-                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Language</label>
-                        <select 
-                          value={personalContext.language}
-                          disabled={isSimulating}
-                          onChange={(e) => setPersonalContext({...personalContext, language: e.target.value as PersonalContext['language']})}
-                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none focus:border-indigo-500/50"
-                        >
-                          <option value="English">🇬🇧 English</option>
-                          <option value="Chinese">🇨🇳 简体中文</option>
-                          <option value="Vietnamese">🇻🇳 Tiếng Việt</option>
-                          <option value="Japanese">🇯🇵 日本語</option>
-                        </select>
+                    {/* Inline hazard scenario switcher — replaces the old setup form */}
+                    <div className="pt-2 border-t border-slate-900/60">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">Drill scenario</span>
+                        <span className="text-[9px] font-mono text-slate-600">{personalContext.language}</span>
                       </div>
-
-                      <div>
-                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Hazard Event</label>
-                        <select 
-                          value={activeHazard}
-                          disabled={isSimulating}
-                          onChange={(e) => setActiveHazard(e.target.value as any)}
-                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none focus:border-indigo-500/50"
-                        >
-                          <option value="earthquake">🌋 Earthquake</option>
-                          <option value="typhoon">🌀 Typhoon</option>
-                          <option value="tsunami">🌊 Tsunami</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Location</label>
-                        <select 
-                          value={personalContext.location}
-                          disabled={isSimulating}
-                          onChange={(e) => setPersonalContext({...personalContext, location: e.target.value as PersonalContext['location']})}
-                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none"
-                        >
-                          <option value="Shibuya">Shibuya (渋谷)</option>
-                          <option value="Minato">Minato (港区)</option>
-                          <option value="Shinjuku">Shinjuku (新宿)</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Floor Level</label>
-                        <select 
-                          value={personalContext.floor}
-                          disabled={isSimulating}
-                          onChange={(e) => setPersonalContext({...personalContext, floor: e.target.value as PersonalContext['floor']})}
-                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none"
-                        >
-                          <option value="9th Floor">9th Floor (High)</option>
-                          <option value="Ground Floor">Ground Floor (Low)</option>
-                          <option value="Basement">Basement</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Companions</label>
-                        <select 
-                          value={personalContext.companions}
-                          disabled={isSimulating}
-                          onChange={(e) => setPersonalContext({...personalContext, companions: e.target.value as PersonalContext['companions']})}
-                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none"
-                        >
-                          <option value="Traveling Solo">Traveling Solo</option>
-                          <option value="With a Child">With a Child</option>
-                          <option value="With Elderly Parents">With Elderly Parents</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-slate-400 block mb-0.5 uppercase tracking-wide font-bold">Mobility Needs</label>
-                        <select 
-                          value={personalContext.mobility}
-                          disabled={isSimulating}
-                          onChange={(e) => setPersonalContext({...personalContext, mobility: e.target.value as PersonalContext['mobility']})}
-                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-xl focus:outline-none"
-                        >
-                          <option value="Fully Mobile">Fully Mobile</option>
-                          <option value="Wheelchair User">Requires Wheelchair Access</option>
-                        </select>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {([
+                          { id: 'earthquake', label: 'Earthquake', emoji: '🌋' },
+                          { id: 'typhoon', label: 'Typhoon', emoji: '🌀' },
+                          { id: 'tsunami', label: 'Tsunami', emoji: '🌊' }
+                        ] as { id: 'earthquake' | 'typhoon' | 'tsunami'; label: string; emoji: string }[]).map((h) => (
+                          <button
+                            key={h.id}
+                            type="button"
+                            onClick={() => !isSimulating && setActiveHazard(h.id)}
+                            disabled={isSimulating}
+                            className={`text-[10px] font-bold py-1.5 rounded-xl border transition active:scale-95 ${
+                              activeHazard === h.id
+                                ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-200'
+                                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                            } ${isSimulating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            <span className="mr-1">{h.emoji}</span>{h.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -1447,12 +1958,16 @@ export default function App() {
                           <AlertTriangle className="w-3.5 h-3.5 animate-bounce" />
                           {activeHazard === 'earthquake' ? '気象庁 地震緊急警報 (JMA)' : activeHazard === 'typhoon' ? '特別台風警報 (JMA)' : '大津波警報発表 (JMA)'}
                         </span>
-                        <span className="text-[9px] font-mono tracking-wider">LIVE DATA</span>
+                        <span className="text-[9px] font-mono tracking-wider">
+                          {hazardSignal ? hazardSignal.source : 'AWAITING FEED'}
+                        </span>
                       </div>
                       <div className="p-3 text-[11px] font-mono leading-relaxed select-text">
-                        {activeHazard === 'earthquake' && "千葉県東方沖でマグニチュード7.2の強い地震発生。東京都渋谷区で強い揺れ（震度5強以上）に警戒してください。"}
-                        {activeHazard === 'typhoon' && "非常に強い台風が関東地方に接近。渋谷区周辺で最大風速140km/hに達する見込み。不要不急の外出を控えてください。"}
-                        {activeHazard === 'tsunami' && "渋谷区沿岸低地等に危険到達。津波予想高3.2m。直ちに高台や避難ビルなどの安全な場所へ避難を開始してください。"}
+                        {hazardSignal
+                          ? hazardSignal.bulletinJa
+                          : activeHazard === 'earthquake' ? '気象庁の地震速報を取得しています…'
+                          : activeHazard === 'typhoon' ? '気象庁の台風情報を取得しています…'
+                          : '気象庁の津波警報を取得しています…'}
                       </div>
                     </div>
                   )}
