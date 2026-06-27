@@ -1,0 +1,9 @@
+# Override default gcloud ignore rules to ensure .env is uploaded to Cloud Build
+# while keeping it strictly excluded from Git (.gitignore).
+
+.gcloudignore
+.git
+.github
+node_modules
+dist
+.firebase
