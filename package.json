@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "tsc -b && vite build && npx firebase-tools deploy",
+    "deploy:run": "gcloud run deploy disaster-copilot --source . --allow-unauthenticated --region us-central1"
   },
   "dependencies": {
     "lucide-react": "^1.21.0",
