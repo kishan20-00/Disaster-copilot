@@ -261,6 +261,13 @@ const locationMarkers = {
   ]
 };
 
+// Demo family members for Safety Guard Dashboard — hardcoded Tokyo positions near Shibuya
+const FAMILY_MEMBERS = [
+  { id: 'f1', name: 'Yuki (Child)',   status: 'safe',     color: '#22c55e', lat: 35.6605, lng: 139.7032, lastSeen: '2 min ago'  },
+  { id: 'f2', name: 'Hana (Partner)', status: 'safe',     color: '#22c55e', lat: 35.6580, lng: 139.7055, lastSeen: '5 min ago'  },
+  { id: 'f3', name: 'Kenji (Parent)', status: 'awaiting', color: '#f59e0b', lat: 35.6572, lng: 139.6982, lastSeen: '12 min ago' },
+];
+
 // Helper to get shelter information dynamically without hardcoding
 const getShelterInfo = (location: string, language: string, dynamicShelters?: any[]) => {
   const markers = (dynamicShelters && dynamicShelters.length > 0)
@@ -341,6 +348,7 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState(-1);
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [smsStatus, setSmsStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [distressSent, setDistressSent] = useState(false);
 
   // Google Maps styles and interactive state
   const [mapLayer, setMapLayer] = useState<'streets' | 'satellite' | 'terrain' | 'traffic' | 'hazard'>('streets');
@@ -571,6 +579,24 @@ export default function App() {
       });
       googleMarkersRef.current.push(userMarker);
     }
+
+    // 4b. Family member position pins (Safety Guard Dashboard)
+    FAMILY_MEMBERS.forEach(member => {
+      const pin = new google.maps.Marker({
+        position: { lat: member.lat, lng: member.lng },
+        map: mapInstanceRef.current,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 5,
+          fillColor: member.color,
+          fillOpacity: 0.9,
+          strokeColor: '#0d1117',
+          strokeWeight: 1.5
+        },
+        title: member.name
+      });
+      googleMarkersRef.current.push(pin);
+    });
 
     // 5. Render live real-time Traffic layer if traffic view is requested
     if (trafficLayerRef.current) {
@@ -1115,7 +1141,9 @@ export default function App() {
 
         // ── Step 3: Translate & Comms Agent (+ generate SMS in parallel) ──
         markRunning(3);
-        const trackerUrl = `https://saferoute.ai/t/${personalContext.location.slice(0, 4).toLowerCase()}`;
+        const trackerUrl = livePosition
+          ? `https://maps.google.com/?q=${livePosition.lat.toFixed(5)},${livePosition.lng.toFixed(5)}`
+          : `https://maps.google.com/?q=${getCityFallback(personalContext.location).lat},${getCityFallback(personalContext.location).lng}`;
         let translateResult = `Draft text generated in ${profile.language}. Emergency contact parsed. Human validation required.`;
         let smsPromise: Promise<string> = Promise.resolve('');
         if (isGeminiConfigured) {
@@ -1457,15 +1485,11 @@ export default function App() {
       Shinjuku: { English: 'Shinjuku', Chinese: '新宿', Vietnamese: 'Shinjuku', Japanese: '新宿' }
     };
     
-    const trackerUrlMap: Record<string, string> = {
-      Shibuya: 'https://saferoute.ai/t/shib',
-      Minato: 'https://saferoute.ai/t/mina',
-      Shinjuku: 'https://saferoute.ai/t/shinj'
-    };
-
     const locName = (localizedLocMap[loc] && localizedLocMap[loc][lang]) || loc;
     const shelterName = getShelterInfo(loc, lang, googleMapsLoaded ? dynamicMarkers : undefined).name;
-    const trackerUrl = trackerUrlMap[loc] || 'https://saferoute.ai/t/shib';
+    const trackerUrl = livePosition
+      ? `https://maps.google.com/?q=${livePosition.lat.toFixed(5)},${livePosition.lng.toFixed(5)}`
+      : `https://maps.google.com/?q=${getCityFallback(loc).lat},${getCityFallback(loc).lng}`;
 
     if (activeHazard === 'earthquake') {
       if (lang === 'English') {
@@ -2345,6 +2369,63 @@ export default function App() {
                           </button>
                         ))}
                       </div>
+                    </div>
+                  </div>
+
+                  {/* SAFETY GUARD DASHBOARD — All Family Secure */}
+                  <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-slate-900/60">
+                      <div className="flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-indigo-400" />
+                        <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans text-slate-300">Safety Guard</span>
+                      </div>
+                      <span className={`text-[9px] font-mono font-bold ${
+                        FAMILY_MEMBERS.every(f => f.status === 'safe') ? 'text-emerald-400' : 'text-amber-400'
+                      }`}>
+                        {FAMILY_MEMBERS.filter(f => f.status === 'safe').length}/{FAMILY_MEMBERS.length} SAFE
+                      </span>
+                    </div>
+
+                    {/* Per-member status rows */}
+                    <div className="space-y-2">
+                      {FAMILY_MEMBERS.map(member => (
+                        <div key={member.id} className="flex items-center gap-2.5">
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: member.color }} />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[10.5px] font-bold text-slate-200 font-sans leading-none">{member.name}</span>
+                            <p className="text-[9px] font-mono text-slate-500 leading-none mt-0.5">{member.lastSeen}</p>
+                          </div>
+                          <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md shrink-0 ${
+                            member.status === 'safe'
+                              ? 'bg-emerald-500/15 text-emerald-400'
+                              : 'bg-amber-500/15 text-amber-400 animate-pulse'
+                          }`}>
+                            {member.status === 'safe' ? 'Safe' : 'Awaiting'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Send Distress Signal — single-tap */}
+                    <div className="pt-1 border-t border-slate-900/60">
+                      {distressSent ? (
+                        <div className="flex items-center gap-1.5 justify-center py-1.5">
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-[10.5px] font-bold text-emerald-400 font-mono">Distress signal sent to family</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setDistressSent(true);
+                            navigator.vibrate?.([200, 100, 200, 100, 200]);
+                            setTimeout(() => setDistressSent(false), 8000);
+                          }}
+                          className="w-full py-2 bg-red-600/15 hover:bg-red-600/25 border border-red-500/35 hover:border-red-500/55 text-red-300 rounded-xl text-[10.5px] font-extrabold uppercase tracking-wide transition active:scale-95 flex items-center justify-center gap-1.5"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Send Distress Signal
+                        </button>
+                      )}
                     </div>
                   </div>
 
