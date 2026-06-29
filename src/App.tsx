@@ -362,6 +362,7 @@ export default function App() {
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [dynamicMarkers, setDynamicMarkers] = useState<any[]>([]);
   const lastLocationRef = useRef<string>('');
+  const gpsCenteredRef = useRef(false);
   const infoWindowRef = useRef<any>(null);
 
   // Live, model-generated state (replaces hardcoded JMA bulletins, evac steps, SMS draft, user pin)
@@ -485,6 +486,15 @@ export default function App() {
         mapInstanceRef.current.setCenter(center);
         setMapCenter(center);
       }
+    }
+
+    // Pan to real GPS position the first time it resolves after sign-in.
+    // This runs once — ward detection is async and may fail, so don't wait for it.
+    if (livePosition && !gpsCenteredRef.current && mapInstanceRef.current) {
+      gpsCenteredRef.current = true;
+      mapInstanceRef.current.panTo(livePosition);
+      mapInstanceRef.current.setZoom(16);
+      setMapCenter(livePosition);
     }
 
     // 2. Clear existing Google Map markers
