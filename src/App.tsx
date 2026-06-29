@@ -42,6 +42,7 @@ import {
   Mic,
   MicOff,
   Volume2,
+  Camera,
   Search
 } from 'lucide-react';
 
@@ -354,6 +355,8 @@ export default function App() {
   const recognitionRef = useRef<any>(null);
   const processVoiceCommandRef = useRef<((text: string) => void) | null>(null);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
+  const [cameraMode, setCameraMode] = useState(false);
+  const cameraRef = useRef<HTMLVideoElement | null>(null);
 
   // Dynamic Google Places API States & Refs
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
@@ -1368,6 +1371,7 @@ export default function App() {
     setShowSmsModal(false);
     setCurrentStep(0);
     setIsSimulating(true);
+    navigator.vibrate?.([300, 100, 300]);
   };
 
   // Speak an alert announcement the moment the pipeline fires
@@ -1390,10 +1394,39 @@ export default function App() {
     speakText(text, getLangCode(personalContext.language));
   }, [voiceAssistant, currentStep, isSimulating, liveSteps]);
 
+  // Haptic: triple pulse when route is ready, indicating safe path confirmed
+  useEffect(() => {
+    if (currentStep < 4 || isSimulating) return;
+    navigator.vibrate?.([100, 60, 100, 60, 100]);
+  }, [currentStep, isSimulating]);
+
+  // AR Camera: start rear camera stream when cameraMode turns on, stop it when off
+  useEffect(() => {
+    if (!cameraMode) {
+      if (cameraRef.current?.srcObject) {
+        (cameraRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+        cameraRef.current.srcObject = null;
+      }
+      return;
+    }
+    navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      .then(stream => {
+        if (cameraRef.current) {
+          cameraRef.current.srcObject = stream;
+          cameraRef.current.play().catch(() => {});
+        }
+      })
+      .catch(err => {
+        console.warn('Camera access denied', err);
+        setCameraMode(false);
+      });
+  }, [cameraMode]);
+
   const handleApproveSms = () => {
     setSmsStatus('sending');
     setTimeout(() => {
       setSmsStatus('sent');
+      navigator.vibrate?.([600]);
       setTimeout(() => {
         setShowSmsModal(false);
       }, 2000);
@@ -1582,10 +1615,85 @@ export default function App() {
               }
             `}} />
 
+            {/* AR LIVE CAMERA FEED */}
+            {cameraMode && (
+              <video
+                ref={cameraRef}
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ zIndex: 2 }}
+                playsInline
+                muted
+              />
+            )}
+
+            {/* AR OVERLAY — layered above camera feed, below all UI controls */}
+            {cameraMode && (
+              <div
+                className="absolute inset-0 flex flex-col items-center justify-between pointer-events-none px-4 pt-24 pb-44"
+                style={{ zIndex: 12 }}
+              >
+                {/* Hazard type badge */}
+                {currentStep >= 0 && (
+                  <div className={`rounded-2xl px-4 py-2 text-center border backdrop-blur-md ${
+                    activeHazard === 'earthquake' ? 'bg-red-900/70 border-red-500/60' :
+                    activeHazard === 'typhoon' ? 'bg-sky-900/70 border-sky-500/60' :
+                    'bg-amber-900/70 border-amber-500/60'
+                  }`}>
+                    <span className="text-white font-black text-xs uppercase tracking-widest">
+                      {activeHazard === 'earthquake' ? '⚠️ EARTHQUAKE ALERT' :
+                       activeHazard === 'typhoon' ? '🌀 TYPHOON WARNING' : '🌊 TSUNAMI WARNING'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Center: direction arrow + shelter callout */}
+                <div className="flex flex-col items-center gap-3">
+                  {currentStep >= 4 ? (
+                    <>
+                      <div
+                        className="w-24 h-24 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center backdrop-blur-sm"
+                        style={{ boxShadow: '0 0 40px rgba(52,211,153,0.3)' }}
+                      >
+                        <Navigation className="w-12 h-12 text-emerald-400" style={{ transform: 'rotate(-45deg)' }} />
+                      </div>
+                      <div className="bg-slate-900/80 backdrop-blur-md border border-emerald-500/40 rounded-2xl px-5 py-3 text-center">
+                        <p className="text-emerald-400 font-black text-base leading-tight">
+                          {getShelterInfo(personalContext.location, personalContext.language, googleMapsLoaded ? dynamicMarkers : undefined).name}
+                        </p>
+                        <p className="text-white/60 text-[11px] font-mono mt-0.5">
+                          {liveRoute
+                            ? `${liveRoute.distanceText} · ${liveRoute.durationText}`
+                            : getShelterInfo(personalContext.location, personalContext.language, googleMapsLoaded ? dynamicMarkers : undefined).distance}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="bg-slate-900/75 backdrop-blur-md border border-slate-700/60 rounded-2xl px-5 py-3 text-center">
+                      <p className="text-slate-300 text-xs font-mono">Trigger alert to activate AR navigation</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom: current action step card */}
+                {currentStep >= 4 && (() => {
+                  const step = getDynamicAdvice()[0];
+                  return step ? (
+                    <div className="w-full bg-slate-950/90 backdrop-blur-md border border-indigo-500/30 rounded-2xl p-4 shadow-2xl">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-[9px] font-black text-white shrink-0">1</div>
+                        <span className="text-white font-black text-sm leading-tight">{step.title}</span>
+                      </div>
+                      <p className="text-slate-300 text-[11px] leading-relaxed font-mono">{step.desc}</p>
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            )}
+
             {/* REAL GOOGLE MAPS DIV */}
-            <div 
-              ref={mapRef} 
-              className="absolute inset-0 w-full h-full z-0 overflow-hidden" 
+            <div
+              ref={mapRef}
+              className="absolute inset-0 w-full h-full z-0 overflow-hidden"
               style={{ display: googleMapsLoaded ? 'block' : 'none' }}
             />
 
@@ -1981,6 +2089,19 @@ export default function App() {
                 title="Audio Co-pilot Guidance"
               >
                 {voiceAssistant ? <Mic className="w-4 h-4 animate-pulse" /> : <MicOff className="w-4 h-4" />}
+              </button>
+
+              {/* AR Camera View Toggle */}
+              <button
+                onClick={() => setCameraMode(!cameraMode)}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-lg border transition active:scale-95 ${
+                  cameraMode
+                    ? 'bg-violet-600 border-violet-400 text-white'
+                    : 'bg-slate-900/85 backdrop-blur border-slate-800/80 text-slate-300 hover:text-white'
+                }`}
+                title="AR Camera View"
+              >
+                <Camera className="w-4 h-4" />
               </button>
 
               {/* Emergency SOS Pulse Trigger */}
