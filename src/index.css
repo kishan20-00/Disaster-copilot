@@ -80,3 +80,32 @@ body {
     top: 0%;
   }
 }
+
+/* Map + AR overlay animations (SVG route dash, radar pulse, AR scanline) */
+@keyframes lineDash {
+  to { stroke-dashoffset: -20; }
+}
+@keyframes pulseRadar {
+  0% { r: 8px; opacity: 0.8; }
+  100% { r: 24px; opacity: 0; }
+}
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+.line-dash {
+  animation: lineDash 1.2s linear infinite;
+}
+.radar-pulse {
+  animation: pulseRadar 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+.scan-overlay {
+  animation: scanline 8s linear infinite;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

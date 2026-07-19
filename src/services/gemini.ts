@@ -7,32 +7,10 @@ export const isGeminiConfigured = Boolean(API_KEY && API_KEY.trim().length > 0);
 
 const client = isGeminiConfigured ? new GoogleGenAI({ apiKey: API_KEY! }) : null;
 
-export type Language = 'English' | 'Chinese' | 'Vietnamese' | 'Japanese';
-export type Hazard = 'earthquake' | 'typhoon' | 'tsunami';
-
-export interface PersonalProfile {
-  language: Language;
-  location: string;
-  floor: string;
-  companions: string;
-  mobility: string;
-}
-
-export interface HazardSignal {
-  hazard: Hazard;
-  headline: string;
-  bulletinJa: string;
-  bulletinEn: string;
-  magnitude?: number;
-  intensity?: string;
-  source: string;
-}
-
-export interface ActionStep {
-  num: string;
-  title: string;
-  desc: string;
-}
+// Domain types now live in src/types/domain.ts; re-exported here so existing
+// consumers importing them from this module keep working unchanged.
+import type { Language, Hazard, PersonalProfile, HazardSignal, ActionStep } from '../types/domain';
+export type { Language, Hazard, PersonalProfile, HazardSignal, ActionStep };
 
 async function generateJson<T>(prompt: string, schema: any): Promise<T> {
   if (!client) throw new Error('Gemini not configured. Set VITE_GEMINI_API_KEY in .env');
