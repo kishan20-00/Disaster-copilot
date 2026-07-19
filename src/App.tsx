@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { ActionStep, HazardSignal, AgentState, PersonalContext } from '@/types/domain';
 import { LANGUAGES_MAP } from '@/constants/languages';
-import { locationMarkers } from '@/constants/locationMarkers';
 import { INITIAL_AGENTS } from '@/constants/agents';
 import { getShelterInfo } from '@/lib/shelter';
 import { buildAdvice } from '@/lib/advice';
@@ -19,7 +18,7 @@ import { SmsGateModal } from '@/components/sms/SmsGateModal';
 import { FaceIdModal } from '@/components/auth/FaceIdModal';
 import { AROverlay } from '@/components/map/AROverlay';
 import { AuthScreen } from '@/components/auth/AuthScreen';
-import { SvgFallbackMap } from '@/components/map/SvgFallbackMap';
+import { EnableLocationState } from '@/components/map/EnableLocationState';
 import { MapSearchBar } from '@/components/map/MapSearchBar';
 import { CategoryChips } from '@/components/map/CategoryChips';
 import { MapControls } from '@/components/map/MapControls';
@@ -45,7 +44,7 @@ export default function App() {
   const [activeHazard, setActiveHazard] = useState<'earthquake' | 'typhoon' | 'tsunami'>('earthquake');
   const [personalContext, setPersonalContext] = useState<PersonalContext>({
     language: 'English',
-    location: 'Shibuya',
+    location: '',
     floor: '9th Floor',
     companions: 'With a Child',
     mobility: 'Fully Mobile'
@@ -86,9 +85,9 @@ export default function App() {
 
   // Auth/session (Google OAuth + FaceID bypass) and geolocation are managed by hooks.
   const { user, isBypassed, authLoading, showFaceIdModal, faceIdState, triggerBiometricBypass, signOut } = useAuth();
-  useGeolocation({
+  const { requestLocation, locationStatus } = useGeolocation({
     enabled: !!user || isBypassed,
-    googleMapsLoaded, livePosition, liveAddress,
+    googleMapsLoaded, livePosition,
     setLivePosition, setLiveAddress, setPersonalContext
   });
   const handleSignOut = () => {
@@ -101,7 +100,7 @@ export default function App() {
 
   // Google Maps instance + markers/route/layers (owns all map refs); returns the map container ref.
   const { mapRef } = useGoogleMaps({
-    location: personalContext.location, dynamicMarkers, mapLayer, currentStep,
+    dynamicMarkers, mapLayer, currentStep,
     user, isBypassed, livePosition, liveRoute, liveShelter, googleMapsLoaded,
     setGoogleMapsLoaded, setMapCenter, setActiveMarker
   });
@@ -109,7 +108,7 @@ export default function App() {
   // Dynamic Places API search — populates dynamicMarkers from the current map center.
   usePlacesSearch({
     googleMapsLoaded, mapCenter, filterCategory, searchQuery,
-    location: personalContext.location, setDynamicMarkers
+    setDynamicMarkers
   });
 
   // Agent Pipeline States
@@ -128,7 +127,7 @@ export default function App() {
 
   // Dynamic advice synthesis based on context. Prefers live Gemini-generated steps;
   // falls back to the deterministic template below if Gemini is disabled or hasn't returned yet.
-  const getDynamicAdvice = (): ActionStep[] => buildAdvice({ liveSteps, personalContext, activeHazard, googleMapsLoaded, dynamicMarkers });
+  const getDynamicAdvice = (): ActionStep[] => buildAdvice({ liveSteps, personalContext, activeHazard, dynamicMarkers, userPos: livePosition });
 
 
   // Restart simulation
@@ -161,11 +160,11 @@ export default function App() {
   };
 
   // Get the drafted message text. Prefers live Gemini draft when available.
-  const getDraftedSmsText = (): string => buildSmsDraft({ liveSmsDraft, personalContext, activeHazard, googleMapsLoaded, dynamicMarkers, livePosition });
+  const getDraftedSmsText = (): string => buildSmsDraft({ liveSmsDraft, personalContext, activeHazard, dynamicMarkers, livePosition });
 
   const { isListening, heardText, sttFeedback, toggleSpeechRecognition } = useVoiceAssistant({
     voiceAssistant, personalContext, currentStep, smsStatus, isSimulating,
-    liveSteps, activeHazard, googleMapsLoaded, dynamicMarkers,
+    liveSteps, activeHazard, livePosition, dynamicMarkers,
     setPersonalContext, onTrigger: handleTriggerAlert, onApproveSms: handleApproveSms
   });
 
@@ -185,6 +184,11 @@ export default function App() {
              PREMIUM AUTHENTICATION & LOGIN GUARD
              ========================================== */
           <AuthScreen authLoading={authLoading} onBiometricBypass={triggerBiometricBypass} />
+        ) : !(googleMapsLoaded && livePosition) ? (
+          /* ==========================================
+             LOCATION GATE — the app is fully driven by the user's real GPS
+             ========================================== */
+          <EnableLocationState mapsReady={googleMapsLoaded} status={locationStatus} onRetry={requestLocation} />
         ) : (
           /* ==========================================
              MAIN PREMIUM GOOGLE MAPS DISASTER CO-PILOT DASHBOARD
@@ -196,8 +200,8 @@ export default function App() {
               cameraRef={cameraRef}
               currentStep={currentStep}
               activeHazard={activeHazard}
-              shelterName={getShelterInfo(personalContext.location, personalContext.language, googleMapsLoaded ? dynamicMarkers : undefined).name}
-              shelterDistance={getShelterInfo(personalContext.location, personalContext.language, googleMapsLoaded ? dynamicMarkers : undefined).distance}
+              shelterName={getShelterInfo(livePosition, dynamicMarkers).name}
+              shelterDistance={getShelterInfo(livePosition, dynamicMarkers).distance}
               liveRoute={liveRoute}
               firstStep={getDynamicAdvice()[0]}
             />
@@ -206,21 +210,7 @@ export default function App() {
             <div
               ref={mapRef}
               className="absolute inset-0 w-full h-full z-0 overflow-hidden"
-              style={{ display: googleMapsLoaded ? 'block' : 'none' }}
             />
-
-            {/* SVG Fallback Map (Offline and No-Key resilience) */}
-            {!googleMapsLoaded && (
-              <SvgFallbackMap
-                location={personalContext.location}
-                filterCategory={filterCategory}
-                searchQuery={searchQuery}
-                mapLayer={mapLayer}
-                currentStep={currentStep}
-                activeMarker={activeMarker}
-                onSelectMarker={setActiveMarker}
-              />
-            )}
 
             {/* FLOATING TOP GOOGLE MAPS SEARCH BAR */}
             <div className="absolute top-12 left-4 right-4 z-30 flex flex-col gap-2.5">
@@ -259,7 +249,7 @@ export default function App() {
             {/* SELECTION POPUP INFO CARD OVER MAP */}
             <MarkerPopup
               activeMarker={activeMarker}
-              markers={googleMapsLoaded ? dynamicMarkers : (locationMarkers[personalContext.location] || [])}
+              markers={dynamicMarkers}
               currentStep={currentStep}
               onClose={() => setActiveMarker(null)}
               onNavigate={() => { handleTriggerAlert(); setIsDrawerExpanded(true); }}
@@ -286,14 +276,14 @@ export default function App() {
                     <div className="flex flex-col">
                       <span className="text-xs font-black tracking-tight text-white font-sans uppercase">
                         {currentStep >= 4 
-                          ? `${getShelterInfo(personalContext.location, 'English', googleMapsLoaded ? dynamicMarkers : undefined).name} Safe Route`
+                          ? `${(liveShelter?.name || getShelterInfo(livePosition, dynamicMarkers).name)} Safe Route`
                           : currentStep >= 0 
                           ? '📡 Analyzing active safety route...'
                           : '🟢 SafeRoute AI Active'}
                       </span>
                       <span className="text-[9.5px] text-slate-400 font-mono leading-none mt-0.5 uppercase tracking-wide">
-                        {currentStep >= 4 
-                          ? '8 Min ETA • 450m • Hazard-Free Path' 
+                        {currentStep >= 4
+                          ? (liveRoute ? `${liveRoute.durationText} ETA • ${liveRoute.distanceText} • Hazard-Free Path` : 'Calculating safest route…')
                           : isBypassed ? '⚠️ Emergency Offline Local Base' : '🔐 Real-Time Cloud Node'}
                       </span>
                     </div>

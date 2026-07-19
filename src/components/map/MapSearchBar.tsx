@@ -18,7 +18,7 @@ export function MapSearchBar({ searchQuery, onSearchChange, onClearSearch, locat
           type="text"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={`Search ${location} evacuation...`}
+          placeholder={location ? `Search near ${location}…` : 'Search evacuation resources…'}
           className="bg-transparent text-xs text-white placeholder-slate-400 focus:outline-none w-full border-none"
         />
         {searchQuery && (

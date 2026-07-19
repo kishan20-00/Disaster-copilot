@@ -1,14 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { LatLng } from '@/services/geolocation';
-import { getCityFallback } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
-import { locationMarkers } from '@/constants/locationMarkers';
 import { FAMILY_MEMBERS } from '@/constants/family';
 
 declare const google: any;
 
 export interface UseGoogleMapsParams {
-  location: 'Shibuya' | 'Minato' | 'Shinjuku';
   dynamicMarkers: any[];
   mapLayer: string;
   currentStep: number;
@@ -26,7 +23,7 @@ export interface UseGoogleMapsParams {
 // Loads the Google Maps script and manages the live map instance: markers
 // (POIs + user + family), route polyline, traffic/type layers, and centering.
 export function useGoogleMaps({
-  location, dynamicMarkers, mapLayer, currentStep, user, isBypassed,
+  dynamicMarkers, mapLayer, currentStep, user, isBypassed,
   livePosition, liveRoute, liveShelter, googleMapsLoaded,
   setGoogleMapsLoaded, setMapCenter, setActiveMarker
 }: UseGoogleMapsParams) {
@@ -36,7 +33,6 @@ export function useGoogleMaps({
   const routePolylineRef = useRef<any>(null);
   const trafficLayerRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
-  const lastLocationRef = useRef<string>('');
   const gpsCenteredRef = useRef(false);
 
   // Dynamic Google Maps Script Loader
@@ -80,12 +76,8 @@ export function useGoogleMaps({
   useEffect(() => {
     if (!googleMapsLoaded || !mapRef.current || typeof google === 'undefined' || !google.maps) return;
 
-    const centers = {
-      Shibuya: { lat: 35.658034, lng: 139.701630 },
-      Minato: { lat: 35.658581, lng: 139.745433 },
-      Shinjuku: { lat: 35.6895, lng: 139.6917 }
-    };
-    const center = centers[location] || centers.Shibuya;
+    // Everything is driven by the user's real GPS position.
+    const center = livePosition ?? { lat: 0, lng: 0 };
 
     // 1. Initialize Map if not already created
     if (!mapInstanceRef.current) {
@@ -135,15 +127,6 @@ export function useGoogleMaps({
       }, 150);
     }
 
-    // Centering trigger when user swaps target municipalities in setup
-    if (lastLocationRef.current !== location) {
-      lastLocationRef.current = location;
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.setCenter(center);
-        setMapCenter(center);
-      }
-    }
-
     // Pan to real GPS position the first time it resolves after sign-in.
     // This runs once — ward detection is async and may fail, so don't wait for it.
     if (livePosition && !gpsCenteredRef.current && mapInstanceRef.current) {
@@ -157,8 +140,8 @@ export function useGoogleMaps({
     googleMarkersRef.current.forEach(m => m.setMap(null));
     googleMarkersRef.current = [];
 
-    // 3. Create current category & search-filtered markers
-    const markersToDraw = googleMapsLoaded ? dynamicMarkers : (locationMarkers[location] || []);
+    // 3. Create current category & search-filtered markers (real Google Places)
+    const markersToDraw = dynamicMarkers;
 
     markersToDraw.forEach((markerData: any) => {
       const color = {
@@ -210,7 +193,7 @@ export function useGoogleMaps({
     });
 
     // 4. Place current user position pin (Blue pulsing core dot)
-    const userPos = livePosition ?? getCityFallback(location);
+    const userPos = livePosition;
     if (userPos) {
       const userMarker = new google.maps.Marker({
         position: userPos,
@@ -228,23 +211,25 @@ export function useGoogleMaps({
       googleMarkersRef.current.push(userMarker);
     }
 
-    // 4b. Family member position pins (Safety Guard Dashboard)
-    FAMILY_MEMBERS.forEach(member => {
-      const pin = new google.maps.Marker({
-        position: { lat: member.lat, lng: member.lng },
-        map: mapInstanceRef.current,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 5,
-          fillColor: member.color,
-          fillOpacity: 0.9,
-          strokeColor: '#0d1117',
-          strokeWeight: 1.5
-        },
-        title: member.name
+    // 4b. Family member position pins — small offsets from the user's live position.
+    if (livePosition) {
+      FAMILY_MEMBERS.forEach(member => {
+        const pin = new google.maps.Marker({
+          position: { lat: livePosition.lat + member.dLat, lng: livePosition.lng + member.dLng },
+          map: mapInstanceRef.current,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 5,
+            fillColor: member.color,
+            fillOpacity: 0.9,
+            strokeColor: '#0d1117',
+            strokeWeight: 1.5
+          },
+          title: member.name
+        });
+        googleMarkersRef.current.push(pin);
       });
-      googleMarkersRef.current.push(pin);
-    });
+    }
 
     // 5. Render live real-time Traffic layer if traffic view is requested
     if (trafficLayerRef.current) {
@@ -296,7 +281,7 @@ export function useGoogleMaps({
       }
     }
 
-  }, [googleMapsLoaded, location, dynamicMarkers, mapLayer, currentStep, user, isBypassed, livePosition, liveRoute, liveShelter, setMapCenter, setActiveMarker]);
+  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, user, isBypassed, livePosition, liveRoute, liveShelter, setMapCenter, setActiveMarker]);
 
   return { mapRef };
 }

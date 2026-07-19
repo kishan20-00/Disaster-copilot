@@ -54,7 +54,7 @@ export async function runSituationAgent(input: {
     : `No live JMA bulletin available; treat as a simulated ${hazard} drill near ${location}.`;
   return generateText(
     `You are the SITUATION AGENT in a multi-agent disaster co-pilot. ` +
-    `Summarize the current ${hazard} hazard for a civilian in ${location}, Tokyo, in ONE concise English sentence (max 30 words). ` +
+    `Summarize the current ${hazard} hazard for a civilian in ${location}, in ONE concise English sentence (max 30 words). ` +
     `Include magnitude or wind speed or wave height if applicable, the JMA intensity scale, and the immediate local impact. ` +
     `${jmaContext}`
   );
@@ -136,7 +136,7 @@ export async function generateActionSteps(input: {
   const locLine = address ? `User GPS address: "${address}".` : `User approximate area: ${profile.location}.`;
   const etaLine = walkingDuration ? ` Walking ETA to shelter: ${walkingDuration}.` : '';
   const prompt =
-    `Generate exactly 3 prioritized evacuation action steps for a civilian facing a ${hazard} in ${profile.location}, Tokyo. ` +
+    `Generate exactly 3 prioritized evacuation action steps for a civilian facing a ${hazard} in ${profile.location}. ` +
     `Write the title and desc in ${langName(profile.language)}. Use imperative voice. ` +
     `${locLine}${etaLine} ` +
     `Tailor every step to: floor=${profile.floor}, companions=${profile.companions}, mobility=${profile.mobility}. ` +

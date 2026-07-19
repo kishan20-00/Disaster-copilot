@@ -55,17 +55,17 @@ export async function fetchHazardSignal(hazard: Hazard, location: string): Promi
   if (hazard === 'typhoon') {
     return {
       hazard,
-      headline: `Strong typhoon approaching Kanto region near ${location}`,
-      bulletinJa: `関東地方に非常に強い台風が接近中。${location}周辺で暴風と豪雨に厳重警戒してください。`,
-      bulletinEn: `Severe typhoon approaching Kanto near ${location}. Stay indoors and away from windows.`,
+      headline: `Strong typhoon approaching near ${location}`,
+      bulletinJa: `${location}周辺に非常に強い台風が接近中。暴風と豪雨に厳重警戒してください。`,
+      bulletinEn: `Severe typhoon approaching near ${location}. Stay indoors and away from windows.`,
       source: 'Simulated bulletin (JMA typhoon feed not wired)'
     };
   }
   return {
     hazard,
-    headline: `Major tsunami warning for Tokyo Bay near ${location}`,
-    bulletinJa: `東京湾沿岸に大津波警報。${location}周辺は直ちに高台へ避難してください。`,
-    bulletinEn: `Major tsunami warning for Tokyo Bay near ${location}. Move to high ground immediately.`,
+    headline: `Major tsunami warning near ${location}`,
+    bulletinJa: `${location}周辺に大津波警報。直ちに高台へ避難してください。`,
+    bulletinEn: `Major tsunami warning near ${location}. Move to high ground immediately.`,
     source: 'Simulated bulletin (JMA tsunami feed not wired)'
   };
 }

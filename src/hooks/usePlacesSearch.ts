@@ -7,14 +7,13 @@ export interface UsePlacesSearchParams {
   mapCenter: { lat: number; lng: number } | null;
   filterCategory: string;
   searchQuery: string;
-  location: string;
   setDynamicMarkers: (markers: any[]) => void;
 }
 
 // Dynamic Places API (New) fetcher — uses google.maps.places.Place.searchNearby.
 // Requires "Places API (New)" enabled in Google Cloud Console.
 export function usePlacesSearch({
-  googleMapsLoaded, mapCenter, filterCategory, searchQuery, location, setDynamicMarkers
+  googleMapsLoaded, mapCenter, filterCategory, searchQuery, setDynamicMarkers
 }: UsePlacesSearchParams) {
   useEffect(() => {
     if (!googleMapsLoaded || !mapCenter || typeof google === 'undefined' || !google.maps?.places?.Place) return;
@@ -58,7 +57,7 @@ export function usePlacesSearch({
             name,
             lat,
             lng,
-            desc: `${p.formattedAddress || 'Tokyo, Japan'}. ${descSuffix}`,
+            desc: `${p.formattedAddress ? p.formattedAddress + '. ' : ''}${descSuffix}`,
             x: 0,
             y: 0
           };
@@ -88,5 +87,5 @@ export function usePlacesSearch({
       setDynamicMarkers(final);
     });
 
-  }, [googleMapsLoaded, mapCenter, filterCategory, searchQuery, location, setDynamicMarkers]);
+  }, [googleMapsLoaded, mapCenter, filterCategory, searchQuery, setDynamicMarkers]);
 }

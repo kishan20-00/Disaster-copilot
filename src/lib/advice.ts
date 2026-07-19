@@ -1,17 +1,18 @@
 import type { ActionStep, Hazard, PersonalContext } from '@/types/domain';
+import type { LatLng } from '@/services/geolocation';
 import { getShelterInfo } from '@/lib/shelter';
 
 export interface AdviceInput {
   liveSteps: ActionStep[] | null;
   personalContext: PersonalContext;
   activeHazard: Hazard;
-  googleMapsLoaded: boolean;
   dynamicMarkers: any[];
+  userPos: LatLng | null;
 }
 
 // Deterministic multilingual evacuation steps, tailored to the profile + hazard.
 // Used as a fallback when the Gemini pipeline has not produced live steps.
-export function buildAdvice({ liveSteps, personalContext, activeHazard, googleMapsLoaded, dynamicMarkers }: AdviceInput): ActionStep[] {
+export function buildAdvice({ liveSteps, personalContext, activeHazard, dynamicMarkers, userPos }: AdviceInput): ActionStep[] {
   if (liveSteps && liveSteps.length) return liveSteps;
   const { language, floor, companions, mobility } = personalContext;
 
@@ -50,7 +51,7 @@ export function buildAdvice({ liveSteps, personalContext, activeHazard, googleMa
     });
 
     // Step 3: Route
-    const shelterInfo = getShelterInfo(personalContext.location, language, googleMapsLoaded ? dynamicMarkers : undefined);
+    const shelterInfo = getShelterInfo(userPos, dynamicMarkers);
     const shelter = `${shelterInfo.name} (${shelterInfo.distance})`;
     steps.push({
       num: "3",
