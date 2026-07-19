@@ -10,7 +10,6 @@ export interface UseGoogleMapsParams {
   mapLayer: string;
   currentStep: number;
   user: unknown;
-  isBypassed: boolean;
   livePosition: LatLng | null;
   liveRoute: WalkingRoute | null;
   liveShelter: { name: string; distanceMeters: number; lat: number; lng: number } | null;
@@ -23,7 +22,7 @@ export interface UseGoogleMapsParams {
 // Loads the Google Maps script and manages the live map instance: markers
 // (POIs + user + family), route polyline, traffic/type layers, and centering.
 export function useGoogleMaps({
-  dynamicMarkers, mapLayer, currentStep, user, isBypassed,
+  dynamicMarkers, mapLayer, currentStep, user,
   livePosition, liveRoute, liveShelter, googleMapsLoaded,
   setGoogleMapsLoaded, setMapCenter, setActiveMarker
 }: UseGoogleMapsParams) {
@@ -281,7 +280,7 @@ export function useGoogleMaps({
       }
     }
 
-  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, user, isBypassed, livePosition, liveRoute, liveShelter, setMapCenter, setActiveMarker]);
+  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, user, livePosition, liveRoute, liveShelter, setMapCenter, setActiveMarker]);
 
   return { mapRef };
 }

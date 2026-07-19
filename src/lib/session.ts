@@ -5,22 +5,21 @@ import type { AuthUser } from '@/types/domain';
 const KEY = 'saferoute.session.v1';
 
 export interface StoredSession {
-  user: AuthUser | null;
-  isBypassed: boolean;
-  exp: number | null; // Google ID-token expiry (unix seconds); null for the offline bypass
+  user: AuthUser;
+  exp: number | null; // Google ID-token expiry (unix seconds)
 }
 
-// Load a valid session, or null. Drops (and clears) an expired Google session.
+// Load a valid session, or null. Drops (and clears) an expired session.
 export function loadSession(): StoredSession | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const s = JSON.parse(raw) as StoredSession;
+    if (!s.user) return null;
     if (s.exp && Date.now() / 1000 >= s.exp) {
       clearSession();
       return null;
     }
-    if (!s.user && !s.isBypassed) return null;
     return s;
   } catch {
     return null;
