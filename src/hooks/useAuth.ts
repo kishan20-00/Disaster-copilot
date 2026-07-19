@@ -1,20 +1,20 @@
 import { useEffect, useState } from 'react';
 import { parseJwt } from '@/lib/jwt';
+import { loadSession, saveSession, clearSession } from '@/lib/session';
+import type { AuthUser } from '@/types/domain';
 
 declare const google: any;
 
-export interface AuthUser {
-  name: string;
-  email: string;
-  avatar?: string;
-}
+export type { AuthUser };
 
 // Google Identity Services OAuth + the offline FaceID biometric bypass.
-// Owns all auth/session state; `signOut` clears auth only (callers layer on
-// any app-state reset they need).
+// The session is persisted to localStorage (client-only, no backend), so a page
+// refresh keeps the user signed in until the Google token expires or they sign
+// out. `signOut` clears auth only (callers layer on any app-state reset).
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isBypassed, setIsBypassed] = useState(false);
+  // Rehydrate from a previously stored (and still-valid) session on first load.
+  const [user, setUser] = useState<AuthUser | null>(() => loadSession()?.user ?? null);
+  const [isBypassed, setIsBypassed] = useState<boolean>(() => loadSession()?.isBypassed ?? false);
   const [authLoading, setAuthLoading] = useState<'none' | 'google' | 'biometric'>('none');
   const [showFaceIdModal, setShowFaceIdModal] = useState(false);
   const [faceIdState, setFaceIdState] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle');
@@ -24,11 +24,15 @@ export function useAuth() {
       setAuthLoading('google');
       const payload = parseJwt(response.credential);
       if (payload) {
-        setUser({
+        const authedUser: AuthUser = {
           name: payload.name || payload.given_name || "Google User",
           email: payload.email,
           avatar: payload.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${payload.email}`
-        });
+        };
+        setUser(authedUser);
+        // Persist with the token's own expiry so the session self-terminates.
+        const exp = typeof payload.exp === 'number' ? payload.exp : null;
+        saveSession({ user: authedUser, isBypassed: false, exp });
       } else {
         alert("Authentication failed: Unable to read credentials.");
       }
@@ -85,6 +89,21 @@ export function useAuth() {
     return () => clearInterval(interval);
   }, [user, isBypassed]);
 
+  // Auto sign-out when the persisted Google token reaches its expiry while the
+  // app is open (the offline bypass has no expiry).
+  useEffect(() => {
+    if (!user) return;
+    const s = loadSession();
+    if (!s?.exp) return;
+    const ms = s.exp * 1000 - Date.now();
+    const timer = setTimeout(() => {
+      setUser(null);
+      setIsBypassed(false);
+      clearSession();
+    }, Math.max(0, ms));
+    return () => clearTimeout(timer);
+  }, [user]);
+
   // Biometric bypass simulation (offline emergency access).
   const triggerBiometricBypass = () => {
     setShowFaceIdModal(true);
@@ -97,6 +116,8 @@ export function useAuth() {
         setIsBypassed(true);
         setShowFaceIdModal(false);
         setFaceIdState('idle');
+        // Persist the offline bypass (no token expiry — emergency access).
+        saveSession({ user: null, isBypassed: true, exp: null });
       }, 1000);
     }, 2200);
   };
@@ -104,6 +125,12 @@ export function useAuth() {
   const signOut = () => {
     setUser(null);
     setIsBypassed(false);
+    clearSession();
+    try {
+      google?.accounts?.id?.disableAutoSelect?.();
+    } catch {
+      // GSI not loaded — nothing to disable.
+    }
   };
 
   return { user, isBypassed, authLoading, showFaceIdModal, faceIdState, triggerBiometricBypass, signOut };

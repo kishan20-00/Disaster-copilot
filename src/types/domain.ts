@@ -44,3 +44,9 @@ export interface AgentState {
   status: 'idle' | 'running' | 'completed';
   result: string;
 }
+
+export interface AuthUser {
+  name: string;
+  email: string;
+  avatar?: string;
+}
