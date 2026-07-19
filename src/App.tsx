@@ -15,7 +15,6 @@ import { useAgentPipeline } from '@/hooks/useAgentPipeline';
 import { BrandHeader } from '@/components/shell/BrandHeader';
 import { DynamicIsland } from '@/components/shell/DynamicIsland';
 import { SmsGateModal } from '@/components/sms/SmsGateModal';
-import { FaceIdModal } from '@/components/auth/FaceIdModal';
 import { AROverlay } from '@/components/map/AROverlay';
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import { EnableLocationState } from '@/components/map/EnableLocationState';
@@ -83,10 +82,10 @@ export default function App() {
   // Real Google Maps API integration state (map instance/overlay refs live in useGoogleMaps)
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
 
-  // Auth/session (Google OAuth + FaceID bypass) and geolocation are managed by hooks.
-  const { user, isBypassed, authLoading, showFaceIdModal, faceIdState, triggerBiometricBypass, signOut } = useAuth();
+  // Auth/session (Google OAuth) and geolocation are managed by hooks.
+  const { user, authLoading, signOut } = useAuth();
   const { requestLocation, locationStatus } = useGeolocation({
-    enabled: !!user || isBypassed,
+    enabled: !!user,
     googleMapsLoaded, livePosition,
     setLivePosition, setLiveAddress, setPersonalContext
   });
@@ -101,7 +100,7 @@ export default function App() {
   // Google Maps instance + markers/route/layers (owns all map refs); returns the map container ref.
   const { mapRef } = useGoogleMaps({
     dynamicMarkers, mapLayer, currentStep,
-    user, isBypassed, livePosition, liveRoute, liveShelter, googleMapsLoaded,
+    user, livePosition, liveRoute, liveShelter, googleMapsLoaded,
     setGoogleMapsLoaded, setMapCenter, setActiveMarker
   });
 
@@ -179,11 +178,11 @@ export default function App() {
         {/* iOS Dynamic Island Area */}
         <DynamicIsland />
 
-        {!user && !isBypassed ? (
+        {!user ? (
           /* ==========================================
              PREMIUM AUTHENTICATION & LOGIN GUARD
              ========================================== */
-          <AuthScreen authLoading={authLoading} onBiometricBypass={triggerBiometricBypass} />
+          <AuthScreen authLoading={authLoading} />
         ) : !(googleMapsLoaded && livePosition) ? (
           /* ==========================================
              LOCATION GATE — the app is fully driven by the user's real GPS
@@ -284,7 +283,7 @@ export default function App() {
                       <span className="text-[9.5px] text-slate-400 font-mono leading-none mt-0.5 uppercase tracking-wide">
                         {currentStep >= 4
                           ? (liveRoute ? `${liveRoute.durationText} ETA • ${liveRoute.distanceText} • Hazard-Free Path` : 'Calculating safest route…')
-                          : isBypassed ? '⚠️ Emergency Offline Local Base' : '🔐 Real-Time Cloud Node'}
+                          : '🔐 Real-Time Cloud Node'}
                       </span>
                     </div>
                   </div>
@@ -383,9 +382,6 @@ export default function App() {
             />
           </>
         )}
-
-        {/* iOS Face ID Telemetry Overlay Modal */}
-        <FaceIdModal show={showFaceIdModal} faceIdState={faceIdState} />
 
       </div>
     </div>

@@ -15,7 +15,7 @@ This file defines style guidelines, behavioral constraints, and instructions for
 * **Real OAuth Handshake**: No simulated Google login routes are allowed. All sign-ins must flow through the official **Google Identity Services (GSI) SDK** client.
 * **Button Render**: The Sign-In button must be rendered by the `google.accounts.id.renderButton` GSI container inside `src/App.tsx`.
 * **Zero-Bloat Token Decoding**: Decode Google Credentials (JWTs) using the lightweight, dependency-free `parseJwt` utility. Do not install heavy npm wrappers.
-* **Offline Resilience**: Retain the FaceID Biometric Local Bypass. This is a crucial conceptual secondary login for emergency networks during urban disasters.
+* **Session Persistence**: The session is persisted to `localStorage` (`src/lib/session.ts`) and rehydrated on load so a refresh keeps the user signed in; it honors the Google token `exp` and clears on sign-out. (The FaceID Biometric Bypass was removed — Google OAuth is the only sign-in.)
 
 ---
 

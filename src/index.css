@@ -68,19 +68,6 @@ body {
   }
 }
 
-/* Biometric Laser Scanning Line Animation */
-@keyframes scan {
-  0% {
-    top: 0%;
-  }
-  50% {
-    top: 100%;
-  }
-  100% {
-    top: 0%;
-  }
-}
-
 /* Map + AR overlay animations (SVG route dash, radar pulse, AR scanline) */
 @keyframes lineDash {
   to { stroke-dashoffset: -20; }
