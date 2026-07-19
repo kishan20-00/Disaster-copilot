@@ -106,6 +106,26 @@ export async function resolveLocality(pos: LatLng): Promise<Locality | null> {
   });
 }
 
+// Forward-geocode a free-text place/address/city into coordinates so the search
+// box can fly the map anywhere in the world.
+export async function geocodePlace(query: string): Promise<LatLng | null> {
+  if (typeof google === 'undefined' || !google.maps?.Geocoder || !query.trim()) return null;
+  const geocoder = new google.maps.Geocoder();
+  return new Promise((resolve) => {
+    geocoder.geocode({ address: query }, (results: any, status: any) => {
+      if (status === 'OK' && results?.length) {
+        const loc = results[0].geometry?.location;
+        if (loc) {
+          resolve({ lat: loc.lat(), lng: loc.lng() });
+          return;
+        }
+      }
+      if (status !== 'OK' && status !== 'ZERO_RESULTS') console.warn(`[Geocoder search] ${status}`);
+      resolve(null);
+    });
+  });
+}
+
 export async function getWalkingRoute(origin: LatLng, destination: LatLng): Promise<WalkingRoute | null> {
   if (typeof google === 'undefined' || !google.maps?.DirectionsService) return null;
   const svc = new google.maps.DirectionsService();

@@ -31,11 +31,13 @@ import { ActionCards } from '@/components/drawer/ActionCards';
 import { StandbyPanel } from '@/components/drawer/StandbyPanel';
 import type { LatLng } from './services/geolocation';
 import type { WalkingRoute } from './services/maps';
+import { geocodePlace } from './services/maps';
 import {
   RotateCcw,
   Compass,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function App() {
@@ -98,7 +100,7 @@ export default function App() {
   };
 
   // Google Maps instance + markers/route/layers (owns all map refs); returns the map container ref.
-  const { mapRef } = useGoogleMaps({
+  const { mapRef, recenter, panTo } = useGoogleMaps({
     dynamicMarkers, mapLayer, currentStep,
     user, livePosition, liveRoute, liveShelter, googleMapsLoaded,
     setGoogleMapsLoaded, setMapCenter, setActiveMarker
@@ -145,6 +147,23 @@ export default function App() {
     navigator.vibrate?.([300, 100, 300]);
   };
 
+  // Exit the danger stage — cancel any active alert and return to standby.
+  // Setting currentStep/-isSimulating re-runs the pipeline effect, whose cleanup
+  // cancels an in-flight run so these resets stick.
+  const handleStandDown = () => {
+    window.speechSynthesis?.cancel();
+    setAgents(prev => prev.map(a => ({ ...a, status: 'idle', result: '' })));
+    setHazardSignal(null);
+    setLiveSteps(null);
+    setLiveSmsDraft(null);
+    setLiveRoute(null);
+    setLiveShelter(null);
+    setSmsStatus('idle');
+    setShowSmsModal(false);
+    setIsSimulating(false);
+    setCurrentStep(-1);
+  };
+
 
 
   const handleApproveSms = () => {
@@ -160,6 +179,18 @@ export default function App() {
 
   // Get the drafted message text. Prefers live Gemini draft when available.
   const getDraftedSmsText = (): string => buildSmsDraft({ liveSmsDraft, personalContext, activeHazard, dynamicMarkers, livePosition });
+
+  // Search: geocode the typed place and fly the map there, then clear the text
+  // so the nearby-resources filter resets around the new location.
+  const handleSearchSubmit = async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    const pos = await geocodePlace(q);
+    if (pos) {
+      panTo(pos);
+      setSearchQuery('');
+    }
+  };
 
   const { isListening, heardText, sttFeedback, toggleSpeechRecognition } = useVoiceAssistant({
     voiceAssistant, personalContext, currentStep, smsStatus, isSimulating,
@@ -217,6 +248,7 @@ export default function App() {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 onClearSearch={() => setSearchQuery('')}
+                onSubmit={handleSearchSubmit}
                 location={personalContext.location}
                 user={user}
                 onSignOut={handleSignOut}
@@ -233,7 +265,7 @@ export default function App() {
             <MapControls
               mapLayer={mapLayer}
               onSelectLayer={(id) => setMapLayer(id as any)}
-              onRecenter={() => { setActiveMarker(null); setSearchQuery(''); }}
+              onRecenter={() => { recenter(); setActiveMarker(null); }}
               voiceAssistant={voiceAssistant}
               onToggleVoice={() => {
                 if (voiceAssistant) window.speechSynthesis?.cancel();
@@ -353,16 +385,25 @@ export default function App() {
                     <StandbyPanel labels={labels} onTriggerAlert={handleTriggerAlert} />
                   )}
 
-                  {/* RESTART SIMULATION IN DRAWER IF COMPLETED */}
-                  {currentStep >= 4 && (
-                    <div className="flex justify-center pt-2">
-                      <button 
-                        onClick={handleTriggerAlert}
-                        disabled={isSimulating}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-300 hover:text-white rounded-xl text-xs font-bold shadow transition active:scale-95"
+                  {/* ACTIVE-ALERT CONTROLS — exit the danger stage (+ restart when complete) */}
+                  {currentStep >= 0 && (
+                    <div className="flex justify-center gap-2 pt-2">
+                      {currentStep >= 4 && (
+                        <button
+                          onClick={handleTriggerAlert}
+                          disabled={isSimulating}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-300 hover:text-white rounded-xl text-xs font-bold shadow transition active:scale-95 disabled:opacity-45"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          Restart
+                        </button>
+                      )}
+                      <button
+                        onClick={handleStandDown}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600/15 border border-emerald-500/40 hover:bg-emerald-600/25 text-emerald-300 hover:text-emerald-200 rounded-xl text-xs font-bold shadow transition active:scale-95"
                       >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        Restart Emergency Replay
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        Stand Down · All Clear
                       </button>
                     </div>
                   )}
