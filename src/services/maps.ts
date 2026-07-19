@@ -69,6 +69,43 @@ export async function reverseGeocode(pos: LatLng): Promise<string | null> {
   });
 }
 
+export interface Locality {
+  address: string;
+  locality: string;
+}
+
+// Reverse-geocode into a full address + a short locality label (neighborhood /
+// city / region), picking the most specific useful address component. Works
+// anywhere in the world.
+export async function resolveLocality(pos: LatLng): Promise<Locality | null> {
+  if (typeof google === 'undefined' || !google.maps?.Geocoder) return null;
+  const geocoder = new google.maps.Geocoder();
+  return new Promise((resolve) => {
+    geocoder.geocode({ location: pos, language: 'en' }, (results: any, status: any) => {
+      if (status !== 'OK' || !results?.length) {
+        if (status !== 'OK') console.warn(`[Geocoder] ${status}`);
+        resolve(null);
+        return;
+      }
+      const best = results[0];
+      const address: string = best.formatted_address ?? '';
+      const components: any[] = best.address_components ?? [];
+      const pick = (type: string): string | undefined =>
+        components.find((c) => c.types?.includes(type))?.long_name;
+      const locality =
+        pick('sublocality') ||
+        pick('sublocality_level_1') ||
+        pick('locality') ||
+        pick('postal_town') ||
+        pick('administrative_area_level_2') ||
+        pick('administrative_area_level_1') ||
+        address.split(',')[0] ||
+        'Your area';
+      resolve({ address, locality });
+    });
+  });
+}
+
 export async function getWalkingRoute(origin: LatLng, destination: LatLng): Promise<WalkingRoute | null> {
   if (typeof google === 'undefined' || !google.maps?.DirectionsService) return null;
   const svc = new google.maps.DirectionsService();

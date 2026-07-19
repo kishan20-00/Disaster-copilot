@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ActionStep, Hazard, Language, PersonalContext } from '@/types/domain';
+import type { LatLng } from '@/services/geolocation';
 import { getLangCode, speakText } from '@/lib/speech';
 import { buildAdvice } from '@/lib/advice';
 
@@ -11,7 +12,7 @@ export interface UseVoiceAssistantParams {
   isSimulating: boolean;
   liveSteps: ActionStep[] | null;
   activeHazard: Hazard;
-  googleMapsLoaded: boolean;
+  livePosition: LatLng | null;
   dynamicMarkers: any[];
   setPersonalContext: React.Dispatch<React.SetStateAction<PersonalContext>>;
   onTrigger: () => void;
@@ -23,7 +24,7 @@ export interface UseVoiceAssistantParams {
 export function useVoiceAssistant(params: UseVoiceAssistantParams) {
   const {
     voiceAssistant, personalContext, currentStep, smsStatus, isSimulating,
-    liveSteps, activeHazard, googleMapsLoaded, dynamicMarkers,
+    liveSteps, activeHazard, livePosition, dynamicMarkers,
     setPersonalContext, onTrigger, onApproveSms
   } = params;
 
@@ -162,21 +163,6 @@ export function useVoiceAssistant(params: UseVoiceAssistantParams) {
       updated = true;
     }
 
-    // Location
-    if (lower.includes('shibuya') || lower.includes('shibuyaward') || lower.includes('渋') || lower.includes('涩谷')) {
-      setPersonalContext(prev => ({ ...prev, location: 'Shibuya' }));
-      feedback = 'Location updated to Shibuya.';
-      updated = true;
-    } else if (lower.includes('minato') || lower.includes('minatoward') || lower.includes('港区')) {
-      setPersonalContext(prev => ({ ...prev, location: 'Minato' }));
-      feedback = 'Location updated to Minato.';
-      updated = true;
-    } else if (lower.includes('shinjuku') || lower.includes('shinjukuward') || lower.includes('新宿')) {
-      setPersonalContext(prev => ({ ...prev, location: 'Shinjuku' }));
-      feedback = 'Location updated to Shinjuku.';
-      updated = true;
-    }
-
     // Action Commands
     if (lower.includes('trigger') || lower.includes('simulation') || lower.includes('start') || lower.includes('alert') || lower.includes('地震') || lower.includes('台風') || lower.includes('kích hoạt') || lower.includes('chạy')) {
       onTrigger();
@@ -243,7 +229,7 @@ export function useVoiceAssistant(params: UseVoiceAssistantParams) {
   // completion; deliberately not re-run on later profile edits.
   useEffect(() => {
     if (!voiceAssistant || currentStep < 4 || isSimulating) return;
-    const steps = buildAdvice({ liveSteps, personalContext, activeHazard, googleMapsLoaded, dynamicMarkers });
+    const steps = buildAdvice({ liveSteps, personalContext, activeHazard, dynamicMarkers, userPos: livePosition });
     const text = steps.map(s => `${s.title}. ${s.desc}`).join(' ');
     speakText(text, getLangCode(personalContext.language));
     // eslint-disable-next-line react-hooks/exhaustive-deps

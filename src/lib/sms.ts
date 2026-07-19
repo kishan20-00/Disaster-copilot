@@ -1,36 +1,26 @@
 import type { Hazard, PersonalContext } from '@/types/domain';
 import type { LatLng } from '@/services/geolocation';
-import { getCityFallback } from '@/services/geolocation';
 import { getShelterInfo } from '@/lib/shelter';
 
 export interface SmsDraftInput {
   liveSmsDraft: string | null;
   personalContext: PersonalContext;
   activeHazard: Hazard;
-  googleMapsLoaded: boolean;
   dynamicMarkers: any[];
   livePosition: LatLng | null;
 }
 
 // Deterministic multilingual emergency SMS draft (fallback when Gemini is off).
-export function buildSmsDraft({ liveSmsDraft, personalContext, activeHazard, googleMapsLoaded, dynamicMarkers, livePosition }: SmsDraftInput): string {
+export function buildSmsDraft({ liveSmsDraft, personalContext, activeHazard, dynamicMarkers, livePosition }: SmsDraftInput): string {
   if (liveSmsDraft && liveSmsDraft.trim().length > 0) return liveSmsDraft;
   const lang = personalContext.language;
-  const loc = personalContext.location;
   const floorClean = personalContext.floor.replace(' Floor', '');
 
-  // Dynamic localization maps
-  const localizedLocMap: Record<string, Record<string, string>> = {
-    Shibuya: { English: 'Shibuya', Chinese: '涩谷', Vietnamese: 'Shibuya', Japanese: '渋谷' },
-    Minato: { English: 'Minato', Chinese: '港区', Vietnamese: 'Minato', Japanese: '港区' },
-    Shinjuku: { English: 'Shinjuku', Chinese: '新宿', Vietnamese: 'Shinjuku', Japanese: '新宿' }
-  };
-
-  const locName = (localizedLocMap[loc] && localizedLocMap[loc][lang]) || loc;
-  const shelterName = getShelterInfo(loc, lang, googleMapsLoaded ? dynamicMarkers : undefined).name;
+  const locName = personalContext.location || 'your area';
+  const shelterName = getShelterInfo(livePosition, dynamicMarkers).name;
   const trackerUrl = livePosition
     ? `https://maps.google.com/?q=${livePosition.lat.toFixed(5)},${livePosition.lng.toFixed(5)}`
-    : `https://maps.google.com/?q=${getCityFallback(loc).lat},${getCityFallback(loc).lng}`;
+    : 'https://maps.google.com/';
 
   if (activeHazard === 'earthquake') {
     if (lang === 'English') {
@@ -45,13 +35,13 @@ export function buildSmsDraft({ liveSmsDraft, personalContext, activeHazard, goo
     return `【緊急連絡】${locName}で強い地震。無事です（${personalContext.floor}・子供同伴）。${shelterName}へ移動します。現在地：${trackerUrl}`;
   } else if (activeHazard === 'typhoon') {
     if (lang === 'English') {
-      return `Alert: Category 4 Typhoon in Tokyo. Staying inside on floor ${floorClean}. Secured. Track: ${trackerUrl}`;
+      return `Alert: Category 4 Typhoon near ${locName}. Staying inside on floor ${floorClean}. Secured. Track: ${trackerUrl}`;
     }
     if (lang === 'Chinese') {
-      return `警告：台风4级登陆东京。我们在${personalContext.floor}室内避险。一切安好。追踪: ${trackerUrl}`;
+      return `警告：${locName}附近台风4级。我们在${personalContext.floor}室内避险。一切安好。追踪: ${trackerUrl}`;
     }
     if (lang === 'Vietnamese') {
-      return `Cảnh báo: Bão Cấp 4 ở Tokyo. Đang trú ẩn ở tầng ${floorClean}. An toàn. Định vị: ${trackerUrl}`;
+      return `Cảnh báo: Bão Cấp 4 gần ${locName}. Đang trú ẩn ở tầng ${floorClean}. An toàn. Định vị: ${trackerUrl}`;
     }
     return `【緊急連絡】大型台風接近中。安全に${personalContext.floor}に留まっています。無事です。GPS：${trackerUrl}`;
   } else {

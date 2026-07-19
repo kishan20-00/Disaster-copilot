@@ -14,7 +14,7 @@ export function StandbyPanel({ labels, onTriggerAlert }: StandbyPanelProps) {
       </div>
       <h4 className="text-[11.5px] font-bold text-slate-200 font-sans">SafeRoute AI Evacuation Assistant</h4>
       <p className="text-slate-400 text-[10px] px-6 mt-1.5 leading-relaxed max-w-[280px]">
-        Configured with local Tokyo shelter feeds, Google Identity API, and Gemini 2.5. Trigger an alert on the map or expand configs to start co-piloting.
+        Configured with live Google Places shelter data around you, Google Identity API, and Gemini 2.5. Trigger an alert on the map or expand configs to start co-piloting.
       </p>
 
       <button

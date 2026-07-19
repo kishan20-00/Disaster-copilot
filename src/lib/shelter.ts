@@ -1,26 +1,33 @@
-import { locationMarkers } from '@/constants/locationMarkers';
+import type { LatLng } from '@/services/geolocation';
+import { findNearestShelter, formatDistance } from '@/services/maps';
 
-// Resolve shelter info (localized name/distance/detail) — prefers dynamic Places
-// results when available, else falls back to the hardcoded ward markers.
-export const getShelterInfo = (location: string, language: string, dynamicShelters?: any[]) => {
-  const markers = (dynamicShelters && dynamicShelters.length > 0)
-    ? dynamicShelters
-    : (locationMarkers[location as keyof typeof locationMarkers] || []);
-  const shelter = markers.find(m => m.category === 'shelter') as any;
-  if (!shelter) {
-    return { name: 'Emergency Shelter', distance: '400m', detail: 'Open shelter', fullName: 'Emergency Shelter', desc: '' };
-  }
+export interface ShelterInfo {
+  name: string;
+  fullName: string;
+  distance: string;
+  detail: string;
+  desc: string;
+}
 
-  let name = shelter.shortName || shelter.name;
-  if (language === 'Japanese') name = shelter.shortNameJa || shelter.name;
-  else if (language === 'Chinese') name = shelter.shortNameZh || shelter.name;
-  else if (language === 'Vietnamese') name = shelter.shortNameVi || shelter.name;
-
-  return {
-    name: name || shelter.shortName || shelter.name,
-    fullName: shelter.name,
-    distance: shelter.distance || '350m',
-    detail: shelter.detailDesc || shelter.desc || 'Designated Shelter',
-    desc: shelter.desc
-  };
+const PLACEHOLDER: ShelterInfo = {
+  name: 'Nearest Shelter',
+  fullName: 'Nearest Shelter',
+  distance: '—',
+  detail: 'Locating the nearest designated shelter…',
+  desc: ''
 };
+
+// Nearest real shelter from live Google Places markers around the user's GPS
+// position, with a real haversine distance. Works anywhere in the world.
+export function getShelterInfo(userPos: LatLng | null, dynamicMarkers: any[]): ShelterInfo {
+  if (!userPos || !dynamicMarkers?.length) return PLACEHOLDER;
+  const nearest = findNearestShelter(userPos, dynamicMarkers);
+  if (!nearest) return PLACEHOLDER;
+  return {
+    name: nearest.name,
+    fullName: nearest.name,
+    distance: formatDistance(nearest.distanceMeters),
+    detail: nearest.desc || 'Nearest designated shelter (from Google Places).',
+    desc: nearest.desc || ''
+  };
+}

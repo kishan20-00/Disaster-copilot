@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { ActionStep, AgentState, Hazard, HazardSignal, PersonalContext } from '@/types/domain';
 import type { LatLng } from '@/services/geolocation';
-import { getCityFallback } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
 import { findNearestShelter, getWalkingRoute, reverseGeocode } from '@/services/maps';
 import { fetchHazardSignal } from '@/services/jma';
@@ -78,10 +77,10 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
       mobility: personalContext.mobility
     };
 
-    // Pick the nearest shelter from real Places results (falls back to city-center logic if Places empty)
-    const originPos = livePosition ?? getCityFallback(personalContext.location);
-    const nearest = findNearestShelter(originPos, dynamicMarkers);
-    const fallbackShelterInfo = getShelterInfo(personalContext.location, 'English', googleMapsLoaded ? dynamicMarkers : undefined);
+    // Pick the nearest shelter from real Places results around the user's GPS position.
+    const originPos = livePosition;
+    const nearest = originPos ? findNearestShelter(originPos, dynamicMarkers) : null;
+    const fallbackShelterInfo = getShelterInfo(originPos, dynamicMarkers);
     const shelterInfo = nearest
       ? {
           name: nearest.name,
@@ -100,7 +99,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
       activeHazard === 'earthquake'
         ? `M7.2 Earthquake detected. ${personalContext.location} intensity JMA 5-Upper. Tsunami threat: ADVISORY (0.5m waves expected).`
         : activeHazard === 'typhoon'
-        ? `Category 4 Typhoon (Whip) making landfall in Kanto. Sustained winds 140km/h. Heavy rain 50mm/hr near ${personalContext.location}.`
+        ? `Category 4 Typhoon making landfall near ${personalContext.location}. Sustained winds 140km/h. Heavy rain 50mm/hr.`
         : `M8.4 Subduction Quake. ${personalContext.location} intensity JMA 6-Lower. Major Tsunami Warning (Waves 3.2m in 8 mins).`;
 
     const fallbackSteps: ActionStep[] = [
@@ -163,7 +162,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         // ── Step 2: Route & Shelter Agent (fetches REAL walking directions) ──
         markRunning(2);
         let walkingRoute: WalkingRoute | null = null;
-        if (shelterPos && googleMapsLoaded) {
+        if (shelterPos && originPos && googleMapsLoaded) {
           walkingRoute = await getWalkingRoute(originPos, shelterPos);
           if (walkingRoute) {
             setLiveRoute(walkingRoute);
@@ -217,7 +216,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         markRunning(3);
         const trackerUrl = livePosition
           ? `https://maps.google.com/?q=${livePosition.lat.toFixed(5)},${livePosition.lng.toFixed(5)}`
-          : `https://maps.google.com/?q=${getCityFallback(personalContext.location).lat},${getCityFallback(personalContext.location).lng}`;
+          : 'https://maps.google.com/';
         let translateResult = `Draft text generated in ${profile.language}. Emergency contact parsed. Human validation required.`;
         let smsPromise: Promise<string> = Promise.resolve('');
         if (isGeminiConfigured) {

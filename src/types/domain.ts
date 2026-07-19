@@ -15,7 +15,7 @@ export interface PersonalProfile {
 // Strict UI-facing profile used across app state (assignable to PersonalProfile).
 export interface PersonalContext {
   language: Language;
-  location: 'Shibuya' | 'Minato' | 'Shinjuku';
+  location: string; // resolved locality name from GPS reverse-geocoding (works anywhere)
   floor: '9th Floor' | 'Ground Floor' | 'Basement';
   companions: 'Traveling Solo' | 'With a Child' | 'With Elderly Parents';
   mobility: 'Fully Mobile' | 'Wheelchair User';
