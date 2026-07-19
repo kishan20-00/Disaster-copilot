@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { LatLng } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
 import { FAMILY_MEMBERS } from '@/constants/family';
@@ -282,5 +282,26 @@ export function useGoogleMaps({
 
   }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, user, livePosition, liveRoute, liveShelter, setMapCenter, setActiveMarker]);
 
-  return { mapRef };
+  // Recenter the map on the user's live GPS position (used by the recenter button).
+  // Explicit pan — bypasses the one-shot gpsCenteredRef so it works after the
+  // user has panned away.
+  const recenter = useCallback(() => {
+    if (mapInstanceRef.current && livePosition) {
+      mapInstanceRef.current.panTo(livePosition);
+      mapInstanceRef.current.setZoom(16);
+      setMapCenter(livePosition);
+    }
+  }, [livePosition, setMapCenter]);
+
+  // Fly the map to an arbitrary position (used by the search box). Updating
+  // mapCenter re-runs the nearby-Places search around the new location.
+  const panTo = useCallback((pos: LatLng) => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.panTo(pos);
+      mapInstanceRef.current.setZoom(15);
+      setMapCenter(pos);
+    }
+  }, [setMapCenter]);
+
+  return { mapRef, recenter, panTo };
 }
