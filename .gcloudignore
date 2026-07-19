@@ -1,0 +1,12 @@
+# Controls what `gcloud run deploy --source .` uploads to Cloud Build.
+# IMPORTANT: when this file exists gcloud ignores .gitignore, so .env is NOT
+# excluded here — it must reach the container build for Vite to bake the
+# VITE_* vars into the bundle at `npm run build` time. (These are client-side
+# keys that ship in the browser bundle anyway; restrict them by API/referrer.)
+.git/
+.github/
+node_modules/
+dist/
+.firebase/
+*.log
+.DS_Store

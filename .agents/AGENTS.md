@@ -26,6 +26,7 @@ This file defines style guidelines, behavioral constraints, and instructions for
 ---
 
 ## 🚀 CI/CD & Deployment
-* **Pipeline Integration**: Ensure every merge or PR can pass compilation checks on GitHub Actions via the `Build & Test Verification` pipeline in `.github/workflows/ci-cd.yml`.
-* **Dynamic Key Injection**: The build pipeline must dynamically generate temporary `.env` files using secrets from GitHub Secrets (`VITE_GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`).
-* **Deployments**: Production deployments must be compiled, containerized, and deployed to serverless **Google Cloud Run** via the native `npm run deploy:run` script.
+* **Pipeline Integration**: Ensure every merge or PR passes lint + type-check + production build on GitHub Actions via the `Build & Test Verification` job in `.github/workflows/ci-cd.yml`.
+* **Dynamic Key Injection**: The pipeline generates a temporary `.env` from GitHub Secrets. Because Vite inlines env at **build time**, all client keys are required: `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_MAPS_API_KEY`, `VITE_GEMINI_API_KEY`, and optional `VITE_GEMINI_MODEL`. (No `GOOGLE_CLIENT_SECRET` — the client uses the GSI ID-token flow, which has no secret.)
+* **Cloud Build upload**: `gcloud run deploy --source .` builds via the `Dockerfile`, so the generated `.env` must reach the container build. `.gcloudignore` deliberately does **not** exclude `.env` (gcloud ignores `.gitignore` when `.gcloudignore` exists). These are client-public keys — restrict them by API/HTTP-referrer.
+* **Deployments**: On push to `main`, the `Deploy to Google Cloud Run` job deploys to serverless **Google Cloud Run** (`gcloud run deploy --source .`). Requires GitHub Secret `GCP_SA_KEY` (or Workload Identity Federation) and the Cloud Run + Cloud Build APIs enabled. Local equivalent: `npm run deploy:run`.
