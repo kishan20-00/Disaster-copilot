@@ -57,6 +57,9 @@ export function usePlacesSearch({
             name,
             lat,
             lng,
+            // Kept so hazard-aware shelter ranking can tell a park from a city
+            // hall — open ground suits an earthquake, not a typhoon.
+            types: Array.isArray(p.types) ? p.types : [],
             desc: `${p.formattedAddress ? p.formattedAddress + '. ' : ''}${descSuffix}`,
             x: 0,
             y: 0

@@ -12,7 +12,7 @@ export type Labels = {
 export const LANGUAGES_MAP = {
   English: {
     welcome: "Peace of Mind",
-    trigger: "Trigger Alert Replay",
+    trigger: "Scan For Live Threats",
     approving: "Human-in-the-Loop Gate",
     instructions: "DO THIS NOW",
     familyMsg: "Draft Emergency Message",
@@ -21,7 +21,7 @@ export const LANGUAGES_MAP = {
   },
   Chinese: {
     welcome: "安心保驾",
-    trigger: "触发警报回放",
+    trigger: "扫描实时灾害警报",
     approving: "人工审批网关",
     instructions: "立即执行以下操作",
     familyMsg: "紧急求助短信草稿",
@@ -30,7 +30,7 @@ export const LANGUAGES_MAP = {
   },
   Vietnamese: {
     welcome: "An Tâm Tuyệt Đối",
-    trigger: "Kích Hoạt Kịch Bản",
+    trigger: "Quét Cảnh Báo Thảm Họa",
     approving: "Cổng Phê Duyệt Nhân Sự",
     instructions: "HÀNH ĐỘNG NGAY",
     familyMsg: "Bản Nháp Tin Nhắn Khẩn Cấp",
@@ -39,7 +39,7 @@ export const LANGUAGES_MAP = {
   },
   Japanese: {
     welcome: "安心・安全",
-    trigger: "デモアラート起動",
+    trigger: "最新の災害情報をスキャン",
     approving: "ヒューマン・ゲートウェイ",
     instructions: "今すぐ実行すべき行動",
     familyMsg: "緊急連絡メッセージ案",

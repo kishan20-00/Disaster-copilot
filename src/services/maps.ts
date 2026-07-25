@@ -149,7 +149,26 @@ export async function getWalkingRoute(origin: LatLng, destination: LatLng): Prom
           resolve(null);
           return;
         }
-        const path: LatLng[] = (route.overview_path || []).map((p: any) => ({ lat: p.lat(), lng: p.lng() }));
+        // `overview_path` is a *simplified* polyline: at street zoom it visibly
+        // cuts corners and can look like it runs through buildings. The
+        // per-step paths carry the full geometry, so prefer those and keep
+        // overview_path only as a fallback.
+        const toLatLng = (p: any): LatLng => ({ lat: p.lat(), lng: p.lng() });
+        const detailed: LatLng[] = [];
+        for (const leg of route.legs ?? []) {
+          for (const step of leg.steps ?? []) {
+            for (const point of step.path ?? step.lat_lngs ?? []) {
+              const next = toLatLng(point);
+              // Consecutive steps share an endpoint — don't repeat it.
+              const prev = detailed[detailed.length - 1];
+              if (prev && prev.lat === next.lat && prev.lng === next.lng) continue;
+              detailed.push(next);
+            }
+          }
+        }
+        const path: LatLng[] = detailed.length > 1
+          ? detailed
+          : (route.overview_path || []).map(toLatLng);
         resolve({
           encodedPolyline: route.overview_polyline || '',
           path,

@@ -1,8 +1,7 @@
 import { Navigation, MapPin, Shield, Compass } from 'lucide-react';
-import type { Hazard, Language } from '@/types/domain';
 import type { LatLng } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
-import { ScenarioSwitcher } from '@/components/drawer/ScenarioSwitcher';
+import { getShelterInfo } from '@/lib/shelter';
 
 interface LiveTelemetryCardProps {
   livePosition: LatLng | null;
@@ -10,16 +9,18 @@ interface LiveTelemetryCardProps {
   liveShelter: { name: string } | null;
   liveRoute: WalkingRoute | null;
   dynamicMarkers: any[];
-  language: Language;
-  activeHazard: Hazard;
-  isSimulating: boolean;
-  onSelectHazard: (hazard: Hazard) => void;
 }
 
 export function LiveTelemetryCard({
-  livePosition, liveAddress, liveShelter, liveRoute, dynamicMarkers,
-  language, activeHazard, isSimulating, onSelectHazard
+  livePosition, liveAddress, liveShelter, liveRoute, dynamicMarkers
 }: LiveTelemetryCardProps) {
+  // Straight-line distance to the nearest real shelter. Available as soon as GPS
+  // and Places have landed, so the card is useful before any alert is triggered
+  // — the walking route below only exists once the pipeline has run.
+  const nearest = getShelterInfo(livePosition, dynamicMarkers);
+  const hasShelter = !!liveShelter || nearest.distance !== '—';
+  const shelterName = liveShelter?.name ?? (hasShelter ? nearest.name : null);
+
   return (
     <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3.5 space-y-2">
       <div className="flex items-center gap-1.5 text-slate-300 pb-1.5 border-b border-slate-900/60">
@@ -46,10 +47,13 @@ export function LiveTelemetryCard({
           <div className="flex-1 min-w-0">
             <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">Nearest shelter</span>
             <p className="text-slate-200 leading-snug break-words">
-              {liveShelter
-                ? `${liveShelter.name}`
-                : (dynamicMarkers.find((m: any) => m.category === 'shelter')?.name || 'Awaiting Places data…')}
+              {shelterName ?? 'Awaiting Places data…'}
             </p>
+            {hasShelter && (
+              <p className="text-slate-500 text-[9.5px] leading-snug mt-0.5">
+                {nearest.distance} away · straight line
+              </p>
+            )}
           </div>
         </div>
         {liveRoute && (
@@ -64,14 +68,6 @@ export function LiveTelemetryCard({
           </div>
         )}
       </div>
-
-      {/* Inline hazard scenario switcher — replaces the old setup form */}
-      <ScenarioSwitcher
-        language={language}
-        activeHazard={activeHazard}
-        isSimulating={isSimulating}
-        onSelectHazard={onSelectHazard}
-      />
     </div>
   );
 }
