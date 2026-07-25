@@ -9,10 +9,11 @@ interface LiveTelemetryCardProps {
   liveShelter: { name: string } | null;
   liveRoute: WalkingRoute | null;
   dynamicMarkers: any[];
+  shelterSource: 'official' | 'places' | null;
 }
 
 export function LiveTelemetryCard({
-  livePosition, liveAddress, liveShelter, liveRoute, dynamicMarkers
+  livePosition, liveAddress, liveShelter, liveRoute, dynamicMarkers, shelterSource
 }: LiveTelemetryCardProps) {
   // Straight-line distance to the nearest real shelter. Available as soon as GPS
   // and Places have landed, so the card is useful before any alert is triggered
@@ -52,6 +53,15 @@ export function LiveTelemetryCard({
             {hasShelter && (
               <p className="text-slate-500 text-[9.5px] leading-snug mt-0.5">
                 {nearest.distance} away · straight line
+              </p>
+            )}
+            {shelterSource && (
+              <p className={`text-[9px] font-mono leading-snug mt-0.5 ${
+                shelterSource === 'official' ? 'text-emerald-500' : 'text-amber-500'
+              }`}>
+                {shelterSource === 'official'
+                  ? '✓ officially designated for this hazard'
+                  : '⚠ no official register here — nearby place, not a shelter'}
               </p>
             )}
           </div>

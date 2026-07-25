@@ -4,6 +4,8 @@ import type { LatLng } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
 import { getWalkingRoute, reverseGeocode } from '@/services/maps';
 import { scanForHazards } from '@/services/alerts';
+import { fetchDesignatedShelters } from '@/services/shelters';
+import { responseMode, hazardInfo } from '@/constants/hazards';
 import { evaluateThreats } from '@/lib/impact';
 import type { ThreatScanState } from '@/lib/impact';
 import {
@@ -41,6 +43,8 @@ export interface UseAgentPipelineParams {
   /** The hazard is discovered, not chosen — the scan writes it back. */
   setActiveHazard: React.Dispatch<React.SetStateAction<Hazard>>;
   setThreatScan: React.Dispatch<React.SetStateAction<ThreatScanState | null>>;
+  /** Whether the chosen shelter came from the official register or a guess. */
+  setShelterSource: React.Dispatch<React.SetStateAction<'official' | 'places' | null>>;
 }
 
 // The live multi-agent pipeline: Situation → Personal → Route → Translate →
@@ -71,7 +75,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
       livePosition, liveAddress,
       setAgents, setHazardSignal, setCurrentStep, setLiveSteps, setLiveSmsDraft,
       setLiveRoute, setLiveShelter, setLiveAddress, setIsSimulating, setShowSmsModal,
-      setActiveHazard, setThreatScan
+      setActiveHazard, setThreatScan, setShelterSource
     } = paramsRef.current;
 
     if (currentStep !== 0) return;
@@ -99,6 +103,14 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
     };
 
     const originPos = livePosition;
+
+    // Wind and severe weather are survived indoors — routing someone outside is
+    // the wrong instruction, so these hazards get their own step set.
+    const buildStayPutSteps = (h: Hazard): ActionStep[] => [
+      { num: '1', title: 'Stay inside — do not evacuate', desc: hazardInfo(h).rationale },
+      { num: '2', title: 'Move away from windows and glass', desc: 'Shelter in an inner room or hallway with no exterior glazing.' },
+      { num: '3', title: 'Keep your phone charged and alerts on', desc: 'Conditions can change; you will be told if moving becomes necessary.' }
+    ];
 
     const buildFallbackSteps = (shelterLabel: string): ActionStep[] => [
       { num: '1', title: 'Drop, Cover, Hold', desc: 'Take immediate protective posture and shield your head from falling debris.' },
@@ -167,15 +179,26 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         };
         setHazardSignal(signal);
 
-        // Safest place *for this hazard* — open ground for shaking, a solid
-        // building for wind and water, and never toward the wave.
-        const safest = pickSafestShelter(hazard, originPos, dynamicMarkers, detected.hazard.epicenter);
+        // Safest place *for this hazard*. The official register is queried first:
+        // its sites are already certified for this exact hazard, which the Places
+        // heuristic can only guess at. Outside GSI coverage this comes back empty
+        // and the fallback is labelled as unofficial.
+        const lookup = await fetchDesignatedShelters(originPos, hazard);
+        if (!stillCurrent()) return;
+        setShelterSource(lookup.official ? 'official' : 'places');
+
+        const safest = pickSafestShelter(
+          hazard, originPos, dynamicMarkers, lookup.shelters, detected.hazard.epicenter
+        );
         const shelterInfo = safest
           ? { name: safest.name, fullName: safest.name, distance: safest.distance, detail: safest.rationale, desc: safest.desc }
           : getShelterInfo(originPos, dynamicMarkers);
         const shelterDistance = shelterInfo.distance;
         const shelterPos = safest ? { lat: safest.lat, lng: safest.lng } : null;
-        const fallbackSteps = buildFallbackSteps(`${shelterInfo.name} (${shelterInfo.distance})`);
+        const mode = responseMode(hazard);
+        const fallbackSteps = mode === 'evacuate'
+          ? buildFallbackSteps(`${shelterInfo.name} (${shelterInfo.distance})`)
+          : buildStayPutSteps(hazard);
 
         let situationResult = `${detected.hazard.headline}. ${detected.impact.basis}`;
         if (isGeminiConfigured) {
@@ -220,7 +243,8 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         // ── Step 2: Route & Shelter Agent (fetches REAL walking directions) ──
         markRunning(2);
         let walkingRoute: WalkingRoute | null = null;
-        if (shelterPos && originPos && googleMapsLoaded) {
+        // Only fetch a walking route when leaving is actually the advice.
+        if (mode === 'evacuate' && shelterPos && originPos && googleMapsLoaded) {
           walkingRoute = await getWalkingRoute(originPos, shelterPos);
           if (walkingRoute) {
             setLiveRoute(walkingRoute);
@@ -235,9 +259,11 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
 
         const realDist = walkingRoute?.distanceText;
         const realEta = walkingRoute?.durationText;
-        let routeResult = walkingRoute
-          ? `Nearest shelter: ${shelterInfo.name}. Walking ${realDist}, ETA ${realEta} via Google Directions. Path avoids highway segments.`
-          : `Closest safe shelter: ${shelterInfo.name} (${shelterInfo.detail}). Route validated.`;
+        let routeResult = mode !== 'evacuate'
+          ? `${hazardInfo(hazard).label}: shelter in place. ${hazardInfo(hazard).rationale} No route issued — leaving would increase exposure.`
+          : walkingRoute
+          ? `${lookup.official ? 'Designated' : 'Candidate'} shelter: ${shelterInfo.name}. Walking ${realDist}, ETA ${realEta} via Google Directions.`
+          : `${lookup.official ? 'Designated' : 'Candidate'} shelter: ${shelterInfo.name} (${shelterInfo.detail}).`;
         let stepsPromise: Promise<ActionStep[]> = Promise.resolve(fallbackSteps);
         if (isGeminiConfigured) {
           stepsPromise = generateActionSteps({

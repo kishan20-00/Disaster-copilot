@@ -1,4 +1,5 @@
-import { Radar, ShieldCheck, AlertTriangle, WifiOff, Clock, MapPin } from 'lucide-react';
+import { Radar, ShieldCheck, AlertTriangle, WifiOff, Clock, MapPin, Home, Footprints, Eye } from 'lucide-react';
+import { hazardInfo } from '@/constants/hazards';
 import type { ThreatScanState } from '@/lib/impact';
 
 interface ThreatScanPanelProps {
@@ -31,7 +32,7 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
             Scanning live hazard feeds
           </span>
           <span className="text-[9.5px] font-mono text-slate-500">
-            JMA earthquake · tsunami · typhoon · USGS worldwide
+            JMA quake/tsunami/typhoon · USGS · GDACS worldwide
           </span>
         </div>
       </div>
@@ -98,6 +99,15 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
   const worst = scan.verdict?.worst;
   if (!worst) return null;
   const tone = SEVERITY_STYLE[worst.impact.severity] ?? SEVERITY_STYLE.none;
+  const info = hazardInfo(worst.hazard.hazard);
+
+  // What to DO is the single most important thing on this card — a typhoon that
+  // reaches you means stay inside, not evacuate.
+  const action = worst.impact.response === 'evacuate'
+    ? { Icon: Footprints, text: 'Evacuate now', hint: info.rationale }
+    : worst.impact.response === 'shelter_in_place'
+    ? { Icon: Home, text: 'Stay inside — do not evacuate', hint: info.rationale }
+    : { Icon: Eye, text: 'Monitor only', hint: info.rationale };
 
   return (
     <div className={`border rounded-2xl p-3.5 space-y-2 shadow-lg animate-in fade-in duration-300 ${tone}`}>
@@ -105,7 +115,7 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
         <div className="flex items-center gap-2 min-w-0">
           <AlertTriangle className="w-4 h-4 shrink-0 animate-pulse" />
           <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans truncate">
-            {worst.impact.severity} {worst.hazard.hazard} — affects you
+            {worst.impact.severity} {info.label} — affects you
           </span>
         </div>
         {worst.impact.leadTimeHours !== null && worst.impact.leadTimeHours > 0 && (
@@ -116,6 +126,14 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
       </div>
 
       <p className="text-[10.5px] font-mono leading-snug break-words">{worst.hazard.headline}</p>
+
+      <div className="flex items-start gap-2 bg-black/25 rounded-xl px-2.5 py-2 border border-current/20">
+        <action.Icon className="w-4 h-4 shrink-0 mt-0.5" />
+        <div className="min-w-0">
+          <span className="text-[11px] font-black uppercase tracking-wide block">{action.text}</span>
+          <span className="text-[9.5px] font-mono opacity-80 leading-snug">{action.hint}</span>
+        </div>
+      </div>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-mono opacity-80">
         <span className="flex items-center gap-1">

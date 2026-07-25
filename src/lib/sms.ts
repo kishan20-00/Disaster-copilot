@@ -1,6 +1,7 @@
 import type { Hazard, PersonalContext } from '@/types/domain';
 import type { LatLng } from '@/services/geolocation';
 import { getShelterInfo } from '@/lib/shelter';
+import { hazardInfo, responseMode } from '@/constants/hazards';
 
 export interface SmsDraftInput {
   liveSmsDraft: string | null;
@@ -44,7 +45,7 @@ export function buildSmsDraft({ liveSmsDraft, personalContext, activeHazard, dyn
       return `Cảnh báo: Bão Cấp 4 gần ${locName}. Đang trú ẩn ở tầng ${floorClean}. An toàn. Định vị: ${trackerUrl}`;
     }
     return `【緊急連絡】大型台風接近中。安全に${personalContext.floor}に留まっています。無事です。GPS：${trackerUrl}`;
-  } else {
+  } else if (activeHazard === 'tsunami') {
     if (lang === 'English') {
       return `Alert: Major Tsunami Warning! Evacuating to safe vertical height. Position: ${locName}. Track: ${trackerUrl}`;
     }
@@ -56,4 +57,14 @@ export function buildSmsDraft({ liveSmsDraft, personalContext, activeHazard, dyn
     }
     return `【大津波警報】津波から避難するため、高台へ向かっています。現在地：${locName}。URL: ${trackerUrl}`;
   }
+
+  // Generic draft for the newer hazard classes. English only by design: Gemini
+  // writes the localised version in the live path, and inventing hazard-name
+  // translations for a message people may actually send would be worse than
+  // being plainly English.
+  const info = hazardInfo(activeHazard);
+  const movement = responseMode(activeHazard) === 'evacuate'
+    ? `Heading to ${shelterName}.`
+    : 'Staying put indoors.';
+  return `Alert: ${info.label} near ${locName}. We are safe (floor ${floorClean}). ${movement} Tracker: ${trackerUrl}`;
 }

@@ -1,4 +1,4 @@
-import { X, Check } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface MarkerPopupProps {
   activeMarker: string | null;
@@ -33,9 +33,8 @@ export function MarkerPopup({ activeMarker, markers, currentStep, onClose, onNav
 
       {isShelter && (
         <div className="flex justify-between items-center mt-1 text-[10px]">
-          <span className="text-emerald-400 font-bold flex items-center gap-1">
-            <Check className="w-3.5 h-3.5" /> ADA Accessible
-          </span>
+          {/* Accessibility is not in the Places response, so it is not claimed. */}
+          <span className="text-slate-500 font-mono">Accessibility unverified</span>
           {currentStep < 0 && (
             <button
               onClick={onNavigate}

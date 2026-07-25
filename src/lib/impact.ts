@@ -1,4 +1,5 @@
-import type { Hazard } from '../types/domain';
+import type { Hazard, ResponseMode } from '../types/domain';
+import { hazardInfo, responseMode } from '../constants/hazards';
 import type { LatLng } from '../services/geolocation';
 import type { LiveHazard } from '../services/alerts';
 
@@ -27,7 +28,12 @@ export interface ImpactAssessment {
   leadTimeHours: number | null;
   ageMinutes: number;
   basis: string;
+  /** What to actually do — not every hazard means "go to a shelter". */
+  response: ResponseMode;
 }
+
+/** Sub-assessors return everything except the response mode, which is uniform. */
+type PartialAssessment = Omit<ImpactAssessment, 'response'>;
 
 /** Shaking is instantaneous — past this age an event is history, not an alert. */
 const QUAKE_ACTIVE_WINDOW_MIN = 90;
@@ -100,7 +106,7 @@ const fmtAge = (min: number) =>
 
 // ── Earthquake ───────────────────────────────────────────────────────────────
 
-function assessEarthquake(h: LiveHazard, user: LatLng, ageMin: number): ImpactAssessment {
+function assessEarthquake(h: LiveHazard, user: LatLng, ageMin: number): PartialAssessment {
   const base = {
     hazardId: h.id, hazard: h.hazard, ageMinutes: ageMin, leadTimeHours: 0 as number | null
   };
@@ -168,7 +174,7 @@ function tsunamiLevel(text: string): { severity: Severity; label: string } {
   return { severity: 'minor', label: 'Tsunami Forecast (no significant wave expected)' };
 }
 
-function assessTsunami(h: LiveHazard, user: LatLng, ageMin: number): ImpactAssessment {
+function assessTsunami(h: LiveHazard, user: LatLng, ageMin: number): PartialAssessment {
   const { severity, label } = tsunamiLevel(h.tsunamiKind?.text ?? h.bulletinJa ?? '');
   const dist = h.epicenter ? distanceKm(user, h.epicenter) : null;
   const reach = TSUNAMI_REACH_KM[severity as keyof typeof TSUNAMI_REACH_KM] ?? 0;
@@ -200,7 +206,7 @@ const CATEGORY_SEVERITY: Record<string, Severity> = {
   TD: 'minor', TS: 'moderate', STS: 'severe', TY: 'severe', VSTY: 'extreme', VITY: 'extreme'
 };
 
-function assessTyphoon(h: LiveHazard, user: LatLng, ageMin: number): ImpactAssessment {
+function assessTyphoon(h: LiveHazard, user: LatLng, ageMin: number): PartialAssessment {
   const steps = h.typhoon?.steps ?? [];
   if (!steps.length) {
     return {
@@ -261,14 +267,72 @@ function assessTyphoon(h: LiveHazard, user: LatLng, ageMin: number): ImpactAsses
   };
 }
 
+// ── Generic proximity (GDACS-style point events) ─────────────────────────────
+
+/** GDACS alert level → severity. */
+const GDACS_SEVERITY: Record<string, Severity> = {
+  red: 'extreme', orange: 'severe', green: 'minor'
+};
+
+/** How long a point event stays actionable, by response mode. */
+const GENERIC_ACTIVE_WINDOW_MIN = 24 * 60;
+
+/**
+ * For hazards whose feed reports a location but no footprint — floods,
+ * wildfires, volcanic activity, unclassified events. A coarse per-hazard reach
+ * stands in for the missing extent, and the basis says so plainly rather than
+ * implying the boundary is precise.
+ */
+function assessByProximity(h: LiveHazard, user: LatLng, ageMin: number): PartialAssessment {
+  const info = hazardInfo(h.hazard);
+  const dist = h.epicenter ? distanceKm(user, h.epicenter) : null;
+  const reach = info.coarseReachKm;
+  const level = (h.gdacsAlertLevel ?? '').toLowerCase();
+  const severity = GDACS_SEVERITY[level] ?? 'moderate';
+  const stale = ageMin > GENERIC_ACTIVE_WINDOW_MIN;
+  const inReach = dist !== null && reach > 0 && dist <= reach;
+  // 'monitor' hazards (drought) are reported but never trigger a response.
+  const actionable = info.response !== 'monitor';
+  const affected = actionable && inReach && !stale;
+
+  let basis = `${info.label}`;
+  if (h.gdacsSeverity) basis += ` — ${h.gdacsSeverity}`;
+  basis += dist !== null ? `. Reported ${fmtKm(dist)} away` : '. Location not given';
+  basis += `, ${fmtAge(ageMin)}.`;
+  if (!actionable) {
+    basis += ' This is a slow-onset hazard: monitored, not evacuated.';
+  } else if (dist === null) {
+    basis += ' Without a location, reach to you cannot be judged.';
+  } else if (!inReach) {
+    basis += ` Outside the ${reach} km screening radius used for this hazard type.`;
+  } else if (stale) {
+    basis += ' Older than the active window; treated as historical.';
+  }
+  if (reach > 0 && dist !== null) {
+    basis += ` The feed gives a point rather than an affected area, so ${reach} km is a coarse screen, not a boundary.`;
+  }
+
+  return {
+    hazardId: h.id, hazard: h.hazard, affected,
+    assessable: dist !== null,
+    severity: affected ? severity : 'none',
+    distanceKm: dist, estimatedMmi: null, leadTimeHours: 0, ageMinutes: ageMin, basis
+  };
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export function assessImpact(h: LiveHazard, user: LatLng, now = Date.now()): ImpactAssessment {
   const t = Date.parse(h.occurredAt);
   const ageMin = Number.isFinite(t) ? Math.max(0, (now - t) / 60_000) : Number.POSITIVE_INFINITY;
-  if (h.hazard === 'earthquake') return assessEarthquake(h, user, ageMin);
-  if (h.hazard === 'tsunami') return assessTsunami(h, user, ageMin);
-  return assessTyphoon(h, user, ageMin);
+  // Precise models where a feed publishes a real footprint; coarse proximity
+  // screening for everything else.
+  const partial =
+    h.hazard === 'earthquake' ? assessEarthquake(h, user, ageMin)
+    : h.hazard === 'tsunami' ? assessTsunami(h, user, ageMin)
+    : h.hazard === 'typhoon' && h.typhoon ? assessTyphoon(h, user, ageMin)
+    : assessByProximity(h, user, ageMin);
+  return { ...partial, response: responseMode(h.hazard) };
 }
 
 /** UI-facing record of the most recent scan. */
