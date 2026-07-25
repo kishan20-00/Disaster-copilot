@@ -2,8 +2,10 @@ import { useEffect, useRef } from 'react';
 import type { ActionStep, AgentState, Hazard, HazardSignal, PersonalContext } from '@/types/domain';
 import type { LatLng } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
-import { findNearestShelter, getWalkingRoute, reverseGeocode } from '@/services/maps';
-import { fetchHazardSignal } from '@/services/jma';
+import { getWalkingRoute, reverseGeocode } from '@/services/maps';
+import { scanForHazards } from '@/services/alerts';
+import { evaluateThreats } from '@/lib/impact';
+import type { ThreatScanState } from '@/lib/impact';
 import {
   generateActionSteps,
   generateSmsDraft,
@@ -14,14 +16,13 @@ import {
   runSituationAgent,
   runTranslateAgent
 } from '@/services/gemini';
-import { getShelterInfo } from '@/lib/shelter';
+import { getShelterInfo, pickSafestShelter } from '@/lib/shelter';
 
 type LiveShelter = { name: string; distanceMeters: number; lat: number; lng: number };
 
 export interface UseAgentPipelineParams {
   isSimulating: boolean;
   currentStep: number;
-  activeHazard: Hazard;
   personalContext: PersonalContext;
   googleMapsLoaded: boolean;
   dynamicMarkers: any[];
@@ -37,23 +38,43 @@ export interface UseAgentPipelineParams {
   setLiveAddress: React.Dispatch<React.SetStateAction<string | null>>;
   setIsSimulating: React.Dispatch<React.SetStateAction<boolean>>;
   setShowSmsModal: React.Dispatch<React.SetStateAction<boolean>>;
+  /** The hazard is discovered, not chosen — the scan writes it back. */
+  setActiveHazard: React.Dispatch<React.SetStateAction<Hazard>>;
+  setThreatScan: React.Dispatch<React.SetStateAction<ThreatScanState | null>>;
 }
 
 // The live multi-agent pipeline: Situation → Personal → Route → Translate →
 // Commander. Real Gemini calls when configured; deterministic fallbacks otherwise.
 // A run-id guard cancels stale runs when inputs change mid-flight.
 export function useAgentPipeline(params: UseAgentPipelineParams) {
-  const {
-    isSimulating, currentStep, activeHazard, personalContext, googleMapsLoaded, dynamicMarkers,
-    livePosition, liveAddress,
-    setAgents, setHazardSignal, setCurrentStep, setLiveSteps, setLiveSmsDraft,
-    setLiveRoute, setLiveShelter, setLiveAddress, setIsSimulating, setShowSmsModal
-  } = params;
+  const { isSimulating, currentStep } = params;
 
   const pipelineRunIdRef = useRef(0);
 
+  // A live handle on the newest params, so the run can snapshot what it needs at
+  // start without the effect having to subscribe to any of it.
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
+
+  // Keyed on `isSimulating` alone — that is the only signal that should start a
+  // run or cancel one. Anything else in the dep list re-runs the effect, and the
+  // cleanup's `cancelled = true` then kills the very run that triggered it:
+  // `setCurrentStep(1)` below used to abort the pipeline at step 1 (leaving the
+  // Personal Context agent spinning forever, no route, no ETA), and each Places
+  // refetch produced a fresh `dynamicMarkers` array that did the same thing.
+  // Stand Down still cancels correctly, because it flips `isSimulating` to false.
   useEffect(() => {
-    if (!isSimulating || currentStep !== 0) return;
+    if (!isSimulating) return;
+
+    const {
+      currentStep, personalContext, googleMapsLoaded, dynamicMarkers,
+      livePosition, liveAddress,
+      setAgents, setHazardSignal, setCurrentStep, setLiveSteps, setLiveSmsDraft,
+      setLiveRoute, setLiveShelter, setLiveAddress, setIsSimulating, setShowSmsModal,
+      setActiveHazard, setThreatScan
+    } = paramsRef.current;
+
+    if (currentStep !== 0) return;
 
     const runId = ++pipelineRunIdRef.current;
     let cancelled = false;
@@ -77,58 +98,95 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
       mobility: personalContext.mobility
     };
 
-    // Pick the nearest shelter from real Places results around the user's GPS position.
     const originPos = livePosition;
-    const nearest = originPos ? findNearestShelter(originPos, dynamicMarkers) : null;
-    const fallbackShelterInfo = getShelterInfo(originPos, dynamicMarkers);
-    const shelterInfo = nearest
-      ? {
-          name: nearest.name,
-          fullName: nearest.name,
-          distance: nearest.distanceMeters < 1000
-            ? `${Math.round(nearest.distanceMeters)}m`
-            : `${(nearest.distanceMeters / 1000).toFixed(1)}km`,
-          detail: nearest.desc || 'Nearest designated shelter (from Google Places).',
-          desc: nearest.desc || ''
-        }
-      : fallbackShelterInfo;
-    const shelterDistance = shelterInfo.distance;
-    const shelterPos = nearest ? { lat: nearest.lat, lng: nearest.lng } : null;
 
-    const fallbackSituation =
-      activeHazard === 'earthquake'
-        ? `M7.2 Earthquake detected. ${personalContext.location} intensity JMA 5-Upper. Tsunami threat: ADVISORY (0.5m waves expected).`
-        : activeHazard === 'typhoon'
-        ? `Category 4 Typhoon making landfall near ${personalContext.location}. Sustained winds 140km/h. Heavy rain 50mm/hr.`
-        : `M8.4 Subduction Quake. ${personalContext.location} intensity JMA 6-Lower. Major Tsunami Warning (Waves 3.2m in 8 mins).`;
-
-    const fallbackSteps: ActionStep[] = [
+    const buildFallbackSteps = (shelterLabel: string): ActionStep[] => [
       { num: '1', title: 'Drop, Cover, Hold', desc: 'Take immediate protective posture and shield your head from falling debris.' },
       { num: '2', title: 'Take Stairs, Not Elevator', desc: 'Move calmly through the safest exit, supporting any companions.' },
-      { num: '3', title: `Evacuate to ${shelterInfo.name} (${shelterInfo.distance})`, desc: 'Follow the highlighted route on the map.' }
+      { num: '3', title: `Evacuate to ${shelterLabel}`, desc: 'Follow the highlighted route on the map.' }
     ];
 
     const run = async () => {
       try {
         // ── Step 0: Situation Agent ──
+        // Search live hazard feeds, then decide whether anything found actually
+        // reaches THIS user. Nothing downstream runs unless it does — the whole
+        // point is that an evacuation is not triggered by a distant or past event.
         markRunning(0);
-        const [signal] = await Promise.all([
-          fetchHazardSignal(activeHazard, personalContext.location),
-          wait(300)
-        ]);
+
+        if (!originPos) {
+          setThreatScan({
+            status: 'unavailable', scannedAt: new Date().toISOString(),
+            sourcesQueried: [], sourcesFailed: [], verdict: null
+          });
+          markCompleted(0, 'No GPS fix yet — cannot judge whether a hazard reaches you.');
+          setIsSimulating(false);
+          setCurrentStep(-1);
+          return;
+        }
+
+        const [scan] = await Promise.all([scanForHazards(originPos), wait(300)]);
         if (!stillCurrent()) return;
+
+        const verdict = evaluateThreats(scan.hazards, originPos);
+        // Reaching no feed at all is "unknown", never "all clear".
+        const noFeedAnswered = scan.sourcesQueried.length === 0;
+
+        setThreatScan({
+          status: noFeedAnswered ? 'unavailable' : verdict.worst ? 'threat' : 'clear',
+          scannedAt: scan.scannedAt,
+          sourcesQueried: scan.sourcesQueried,
+          sourcesFailed: scan.sourcesFailed,
+          verdict
+        });
+
+        // ── The gate ──
+        if (!verdict.worst) {
+          const nearest = verdict.all[0];
+          markCompleted(0, noFeedAnswered
+            ? 'Could not reach any hazard feed, so threat status is unknown. Retry when you have a connection.'
+            : `Scanned ${scan.sourcesQueried.length} live feeds — ${scan.hazards.length} recent event(s), none reaching your location. ` +
+              (nearest ? `Closest: ${nearest.impact.basis}` : ''));
+          setIsSimulating(false);
+          setCurrentStep(-1);
+          return;
+        }
+
+        const detected = verdict.worst;
+        const hazard = detected.hazard.hazard;
+        setActiveHazard(hazard);
+
+        const signal: HazardSignal = {
+          hazard,
+          headline: detected.hazard.headline,
+          bulletinJa: detected.hazard.bulletinJa ?? detected.hazard.headline,
+          bulletinEn: detected.hazard.bulletinEn ?? detected.hazard.headline,
+          magnitude: detected.hazard.magnitude,
+          intensity: detected.hazard.observedShindo,
+          source: detected.hazard.source
+        };
         setHazardSignal(signal);
 
-        let situationResult = fallbackSituation;
+        // Safest place *for this hazard* — open ground for shaking, a solid
+        // building for wind and water, and never toward the wave.
+        const safest = pickSafestShelter(hazard, originPos, dynamicMarkers, detected.hazard.epicenter);
+        const shelterInfo = safest
+          ? { name: safest.name, fullName: safest.name, distance: safest.distance, detail: safest.rationale, desc: safest.desc }
+          : getShelterInfo(originPos, dynamicMarkers);
+        const shelterDistance = shelterInfo.distance;
+        const shelterPos = safest ? { lat: safest.lat, lng: safest.lng } : null;
+        const fallbackSteps = buildFallbackSteps(`${shelterInfo.name} (${shelterInfo.distance})`);
+
+        let situationResult = `${detected.hazard.headline}. ${detected.impact.basis}`;
         if (isGeminiConfigured) {
           try {
             situationResult = await runSituationAgent({
-              hazard: activeHazard,
+              hazard,
               location: personalContext.location,
               jmaSignal: signal
             });
           } catch (e) {
-            console.warn('Situation agent failed; using fallback.', e);
+            console.warn('Situation agent failed; using the feed summary.', e);
           }
         }
         if (!stillCurrent()) return;
@@ -184,7 +242,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         if (isGeminiConfigured) {
           stepsPromise = generateActionSteps({
             profile,
-            hazard: activeHazard,
+            hazard,
             shelterName: shelterInfo.name,
             shelterDistance,
             walkingDuration: realEta,
@@ -196,7 +254,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
           try {
             routeResult = await runRouteAgent({
               profile,
-              hazard: activeHazard,
+              hazard,
               shelterName: shelterInfo.name,
               shelterDistance,
               walkingDistance: realDist,
@@ -222,7 +280,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         if (isGeminiConfigured) {
           smsPromise = generateSmsDraft({
             profile,
-            hazard: activeHazard,
+            hazard,
             shelterName: shelterInfo.name,
             trackerUrl
           }).catch((e) => {
@@ -247,7 +305,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
           stepsPromise,
           smsPromise,
           isGeminiConfigured
-            ? runCommanderAgent(profile, activeHazard).catch((e) => {
+            ? runCommanderAgent(profile, hazard).catch((e) => {
                 console.warn('Commander agent failed; using fallback.', e);
                 return `Command list compiled with 3 hyper-personalized steps in ${profile.language}. Layout dispatched.`;
               })
@@ -272,10 +330,10 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
       cancelled = true;
       cancelTimers.forEach(clearTimeout);
     };
-    // Deps are intentionally narrow: the run snapshots livePosition/liveAddress at
-    // start and the run-id guard cancels stale runs — adding them would restart mid-run.
+    // See the note above: every value the run needs is snapshotted from
+    // paramsRef, so `isSimulating` is deliberately the only dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSimulating, currentStep, activeHazard, personalContext, googleMapsLoaded, dynamicMarkers]);
+  }, [isSimulating]);
 
   // Haptic: triple pulse when route is ready, indicating safe path confirmed
   useEffect(() => {

@@ -29,6 +29,8 @@ import { HazardAdvisory } from '@/components/drawer/HazardAdvisory';
 import { AgentPipelineConsole } from '@/components/drawer/AgentPipelineConsole';
 import { ActionCards } from '@/components/drawer/ActionCards';
 import { StandbyPanel } from '@/components/drawer/StandbyPanel';
+import { ThreatScanPanel } from '@/components/drawer/ThreatScanPanel';
+import type { ThreatScanState } from '@/lib/impact';
 import type { LatLng } from './services/geolocation';
 import type { WalkingRoute } from './services/maps';
 import { geocodePlace } from './services/maps';
@@ -41,8 +43,10 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  // Demo configurations
+  // The hazard is discovered by the live scan, never picked by hand. It starts
+  // as earthquake purely so the type is populated before the first scan.
   const [activeHazard, setActiveHazard] = useState<'earthquake' | 'typhoon' | 'tsunami'>('earthquake');
+  const [threatScan, setThreatScan] = useState<ThreatScanState | null>(null);
   const [personalContext, setPersonalContext] = useState<PersonalContext>({
     language: 'English',
     location: '',
@@ -117,21 +121,28 @@ export default function App() {
 
   // Live multi-agent pipeline (Situation → Personal → Route → Translate → Commander) + route-ready haptic.
   useAgentPipeline({
-    isSimulating, currentStep, activeHazard, personalContext, googleMapsLoaded, dynamicMarkers,
+    isSimulating, currentStep, personalContext, googleMapsLoaded, dynamicMarkers,
     livePosition, liveAddress,
     setAgents, setHazardSignal, setCurrentStep, setLiveSteps, setLiveSmsDraft,
-    setLiveRoute, setLiveShelter, setLiveAddress, setIsSimulating, setShowSmsModal
+    setLiveRoute, setLiveShelter, setLiveAddress, setIsSimulating, setShowSmsModal,
+    setActiveHazard, setThreatScan
   });
 
   // Translate labels dynamically based on selected language
   const labels = LANGUAGES_MAP[personalContext.language];
+
+  // Nearest real shelter (Places + haversine). Computed once per render — the
+  // header, the AR overlay and the advice builder all want the same answer.
+  const shelterInfo = getShelterInfo(livePosition, dynamicMarkers);
 
   // Dynamic advice synthesis based on context. Prefers live Gemini-generated steps;
   // falls back to the deterministic template below if Gemini is disabled or hasn't returned yet.
   const getDynamicAdvice = (): ActionStep[] => buildAdvice({ liveSteps, personalContext, activeHazard, dynamicMarkers, userPos: livePosition });
 
 
-  // Restart simulation
+  // Scan the live hazard feeds. Whether anything actually happens after this is
+  // decided by the scan, not by the button — if nothing reaches the user, the
+  // pipeline stands itself back down.
   const handleTriggerAlert = () => {
     window.speechSynthesis?.cancel();
     setAgents(prev => prev.map(a => ({ ...a, status: 'idle', result: '' })));
@@ -142,6 +153,10 @@ export default function App() {
     setLiveShelter(null);
     setSmsStatus('idle');
     setShowSmsModal(false);
+    setThreatScan({
+      status: 'scanning', scannedAt: null, sourcesQueried: [], sourcesFailed: [], verdict: null
+    });
+    setIsDrawerExpanded(true);
     setCurrentStep(0);
     setIsSimulating(true);
     navigator.vibrate?.([300, 100, 300]);
@@ -160,6 +175,7 @@ export default function App() {
     setLiveShelter(null);
     setSmsStatus('idle');
     setShowSmsModal(false);
+    setThreatScan(null);
     setIsSimulating(false);
     setCurrentStep(-1);
   };
@@ -230,8 +246,8 @@ export default function App() {
               cameraRef={cameraRef}
               currentStep={currentStep}
               activeHazard={activeHazard}
-              shelterName={getShelterInfo(livePosition, dynamicMarkers).name}
-              shelterDistance={getShelterInfo(livePosition, dynamicMarkers).distance}
+              shelterName={shelterInfo.name}
+              shelterDistance={shelterInfo.distance}
               liveRoute={liveRoute}
               firstStep={getDynamicAdvice()[0]}
             />
@@ -302,20 +318,24 @@ export default function App() {
                 
                 {/* Dynamic Status / ETA Display */}
                 <div className="w-full px-5 flex justify-between items-center text-left">
-                  <div className="flex gap-2.5 items-center">
-                    <Compass className={`w-5 h-5 text-indigo-400 ${isSimulating ? 'animate-spin' : ''}`} style={{ animationDuration: '6s' }} />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black tracking-tight text-white font-sans uppercase">
-                        {currentStep >= 4 
-                          ? `${(liveShelter?.name || getShelterInfo(livePosition, dynamicMarkers).name)} Safe Route`
-                          : currentStep >= 0 
+                  <div className="flex gap-2.5 items-center min-w-0">
+                    <Compass className={`w-5 h-5 text-indigo-400 shrink-0 ${isSimulating ? 'animate-spin' : ''}`} style={{ animationDuration: '6s' }} />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-black tracking-tight text-white font-sans uppercase truncate">
+                        {currentStep >= 4
+                          ? `${(liveShelter?.name || shelterInfo.name)} Safe Route`
+                          : currentStep >= 0
                           ? '📡 Analyzing active safety route...'
                           : '🟢 SafeRoute AI Active'}
                       </span>
-                      <span className="text-[9.5px] text-slate-400 font-mono leading-none mt-0.5 uppercase tracking-wide">
+                      {/* Always carry something true and useful here: the real walking
+                          ETA once routed, otherwise how far the nearest shelter is. */}
+                      <span className="text-[9.5px] text-slate-400 font-mono leading-none mt-0.5 uppercase tracking-wide truncate">
                         {currentStep >= 4
-                          ? (liveRoute ? `${liveRoute.durationText} ETA • ${liveRoute.distanceText} • Hazard-Free Path` : 'Calculating safest route…')
-                          : '🔐 Real-Time Cloud Node'}
+                          ? (liveRoute ? `${liveRoute.durationText} ETA • ${liveRoute.distanceText} on foot` : 'Calculating safest route…')
+                          : shelterInfo.distance !== '—'
+                          ? `Nearest shelter ${shelterInfo.distance} • ${shelterInfo.name}`
+                          : 'Locating nearest shelter…'}
                       </span>
                     </div>
                   </div>
@@ -342,6 +362,9 @@ export default function App() {
                     />
                   )}
 
+                  {/* LIVE THREAT SCAN — what the feeds say, and whether it reaches you */}
+                  <ThreatScanPanel scan={threatScan} />
+
                   {/* LIVE TELEMETRY CARD — real GPS + nearest shelter + walking ETA */}
                   <LiveTelemetryCard
                     livePosition={livePosition}
@@ -349,10 +372,6 @@ export default function App() {
                     liveShelter={liveShelter}
                     liveRoute={liveRoute}
                     dynamicMarkers={dynamicMarkers}
-                    language={personalContext.language}
-                    activeHazard={activeHazard}
-                    isSimulating={isSimulating}
-                    onSelectHazard={setActiveHazard}
                   />
 
                   {/* SAFETY GUARD DASHBOARD — All Family Secure */}
