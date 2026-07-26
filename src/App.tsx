@@ -15,6 +15,8 @@ import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { useAgentPipeline } from '@/hooks/useAgentPipeline';
 import { BrandHeader } from '@/components/shell/BrandHeader';
 import { DynamicIsland } from '@/components/shell/DynamicIsland';
+import { SplashScreen } from '@/components/shell/SplashScreen';
+import { hasSeenSplash } from '@/lib/splash';
 import { SmsGateModal } from '@/components/sms/SmsGateModal';
 import { AROverlay } from '@/components/map/AROverlay';
 import { AuthScreen } from '@/components/auth/AuthScreen';
@@ -86,6 +88,8 @@ export default function App() {
   const [focusPlace, setFocusPlace] = useState<{ pos: LatLng; name: string; address: string } | null>(null);
   const [overrideNotice, setOverrideNotice] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  // Read once, at mount: the intro plays on a device's first visit and not again.
+  const [showSplash, setShowSplash] = useState(() => !hasSeenSplash());
   // Family places the user recorded. Loaded per account, not globally — see the
   // effect below.
   const [family, setFamily] = useState<FamilyMember[]>([]);
@@ -286,6 +290,10 @@ export default function App() {
         
         {/* iOS Dynamic Island Area */}
         <DynamicIsland />
+
+        {/* Opening animation. Sits over everything, but blocks nothing — auth,
+            Maps and the hazard feeds all initialise behind it. */}
+        {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
 
         {!user ? (
           /* ==========================================
