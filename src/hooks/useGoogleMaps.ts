@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { LatLng } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
 import { haversineMeters } from '@/services/maps';
-import { FAMILY_MEMBERS } from '@/constants/family';
+import type { FamilyMember } from '@/lib/familyStore';
 
 declare const google: any;
 
@@ -20,6 +20,8 @@ export interface UseGoogleMapsParams {
   routingEnabled: boolean;
   /** Set when examining a searched place; drawn separately from the GPS dot. */
   focusPosition: LatLng | null;
+  /** Places the user recorded for family members. Drawn where they actually are. */
+  family: FamilyMember[];
   user: unknown;
   livePosition: LatLng | null;
   liveRoute: WalkingRoute | null;
@@ -33,7 +35,7 @@ export interface UseGoogleMapsParams {
 // Loads the Google Maps script and manages the live map instance: markers
 // (POIs + user + family), route polyline, traffic/type layers, and centering.
 export function useGoogleMaps({
-  dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition, user,
+  dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition, family, user,
   livePosition, liveRoute, liveShelter, googleMapsLoaded,
   setGoogleMapsLoaded, setMapCenter, setActiveMarker
 }: UseGoogleMapsParams) {
@@ -361,25 +363,25 @@ export function useGoogleMaps({
       googleMarkersRef.current.push(focusMarker);
     }
 
-    // 4b. Family member position pins — small offsets from the user's live position.
-    if (livePosition) {
-      FAMILY_MEMBERS.forEach(member => {
-        const pin = new google.maps.Marker({
-          position: { lat: livePosition.lat + member.dLat, lng: livePosition.lng + member.dLng },
-          map: mapInstanceRef.current,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 5,
-            fillColor: member.color,
-            fillOpacity: 0.9,
-            strokeColor: '#0d1117',
-            strokeWeight: 1.5
-          },
-          title: member.name
-        });
-        googleMarkersRef.current.push(pin);
+    // 4b. Family places the user recorded. These were previously fixed offsets
+    // from the user's own position, so three invented relatives trailed them
+    // around at a constant distance forever.
+    family.forEach((member) => {
+      const pin = new google.maps.Marker({
+        position: { lat: member.place.lat, lng: member.place.lng },
+        map: mapInstanceRef.current,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 5,
+          fillColor: '#a78bfa',
+          fillOpacity: 0.9,
+          strokeColor: '#0d1117',
+          strokeWeight: 1.5
+        },
+        title: `${member.name} — expected at ${member.place.name}`
       });
-    }
+      googleMarkersRef.current.push(pin);
+    });
 
     // 5. Render live real-time Traffic layer if traffic view is requested
     if (trafficLayerRef.current) {
@@ -468,7 +470,7 @@ export function useGoogleMaps({
       fittedRouteKeyRef.current = null;
     }
 
-  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition, user, livePosition, liveRoute, liveShelter, publishCenter, cancelAnimation, setActiveMarker]);
+  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition, family, user, livePosition, liveRoute, liveShelter, publishCenter, cancelAnimation, setActiveMarker]);
 
   // Recenter the map on the user's live GPS position (used by the recenter
   // button). An explicit flight — bypasses the one-shot gpsCenteredRef so it

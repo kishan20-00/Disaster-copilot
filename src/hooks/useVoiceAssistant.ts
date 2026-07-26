@@ -122,33 +122,46 @@ export function useVoiceAssistant(params: UseVoiceAssistantParams) {
       updated = true;
     }
 
-    // Floor
-    if (lower.includes('9th floor') || lower.includes('ninth floor') || lower.includes('high rise') || lower.includes('9楼') || lower.includes('九楼') || lower.includes('9階') || lower.includes('tầng 9')) {
-      setPersonalContext(prev => ({ ...prev, floor: '9th Floor' }));
-      feedback = 'Floor context updated to 9th Floor.';
+    // Floor — accepts any storey, not just the three the demo shipped with.
+    const floorMatch = /(?:^|\s)(?:floor\s*(\d{1,3})|(\d{1,3})\s*(?:st|nd|rd|th)?\s*(?:floor|f|階|楼|tầng))/.exec(lower);
+    if (lower.includes('basement') || lower.includes('underground') || lower.includes('地下') || lower.includes('tầng hầm')) {
+      const level = /b\s*(\d)/.exec(lower);
+      const depth = level ? -Math.abs(parseInt(level[1], 10)) : -1;
+      setPersonalContext(prev => ({ ...prev, floor: depth }));
+      feedback = `Floor set to basement level ${Math.abs(depth)}.`;
       updated = true;
-    } else if (lower.includes('ground floor') || lower.includes('first floor') || lower.includes('1st floor') || lower.includes('一楼') || lower.includes('1楼') || lower.includes('1階') || lower.includes('1f') || lower.includes('tầng trệt') || lower.includes('tầng 1')) {
-      setPersonalContext(prev => ({ ...prev, floor: 'Ground Floor' }));
-      feedback = 'Floor context updated to Ground Floor.';
+    } else if (lower.includes('ground floor') || lower.includes('一楼') || lower.includes('1階') || lower.includes('tầng trệt')) {
+      setPersonalContext(prev => ({ ...prev, floor: 0 }));
+      feedback = 'Floor set to ground floor.';
       updated = true;
-    } else if (lower.includes('basement') || lower.includes('underground') || lower.includes('地下') || lower.includes('b1') || lower.includes('tầng hầm')) {
-      setPersonalContext(prev => ({ ...prev, floor: 'Basement' }));
-      feedback = 'Floor context updated to Basement.';
-      updated = true;
+    } else if (floorMatch) {
+      const n = parseInt(floorMatch[1] ?? floorMatch[2], 10);
+      if (Number.isFinite(n) && n >= 0 && n <= 200) {
+        setPersonalContext(prev => ({ ...prev, floor: n }));
+        feedback = `Floor set to ${n}.`;
+        updated = true;
+      }
     }
 
-    // Companions
-    if (lower.includes('solo') || lower.includes('alone') || lower.includes('myself') || lower.includes('单人') || lower.includes('独自') || lower.includes('cá nhân') || lower.includes('một mình')) {
-      setPersonalContext(prev => ({ ...prev, companions: 'Traveling Solo' }));
-      feedback = 'Companions updated to Traveling Solo.';
+    // Companions — attributes rather than three fixed personas.
+    const peopleMatch = /(\d{1,2})\s*(?:people|persons|others|人|người)/.exec(lower);
+    if (lower.includes('alone') || lower.includes('by myself') || lower.includes('solo') || lower.includes('一人') || lower.includes('một mình')) {
+      setPersonalContext(prev => ({ ...prev, companions: { count: 0, needsAssistance: false, needsCarrying: false } }));
+      feedback = 'Set to travelling alone.';
       updated = true;
-    } else if (lower.includes('child') || lower.includes('baby') || lower.includes('stroller') || lower.includes('孩子') || lower.includes('儿童') || lower.includes('子供') || lower.includes('trẻ em') || lower.includes('em bé')) {
-      setPersonalContext(prev => ({ ...prev, companions: 'With a Child' }));
-      feedback = 'Companions updated to With a Child.';
+    } else if (peopleMatch) {
+      const n = parseInt(peopleMatch[1], 10);
+      setPersonalContext(prev => ({ ...prev, companions: { ...prev.companions, count: n } }));
+      feedback = `Set to ${n} with you.`;
       updated = true;
-    } else if (lower.includes('elderly') || lower.includes('parent') || lower.includes('old') || lower.includes('老人') || lower.includes('长辈') || lower.includes('高齢') || lower.includes('cha mẹ') || lower.includes('người già')) {
-      setPersonalContext(prev => ({ ...prev, companions: 'With Elderly Parents' }));
-      feedback = 'Companions updated to With Elderly Parents.';
+    }
+    if (lower.includes('baby') || lower.includes('infant') || lower.includes('carry') || lower.includes('抱') || lower.includes('赤ちゃん')) {
+      setPersonalContext(prev => ({ ...prev, companions: { ...prev.companions, count: Math.max(1, prev.companions.count), needsCarrying: true } }));
+      feedback = 'Noted: someone needs carrying.';
+      updated = true;
+    } else if (lower.includes('elderly') || lower.includes('needs help') || lower.includes('高齢') || lower.includes('người già')) {
+      setPersonalContext(prev => ({ ...prev, companions: { ...prev.companions, count: Math.max(1, prev.companions.count), needsAssistance: true } }));
+      feedback = 'Noted: someone needs help moving.';
       updated = true;
     }
 

@@ -33,12 +33,33 @@ export interface PersonalProfile {
   mobility: string;
 }
 
+// Who is with the user, described by the things that actually change the advice
+// rather than by a fixed set of personas. "With a Child" and "With Elderly
+// Parents" both really meant "someone slower who may need help on stairs", and
+// there was no way at all to say you were with another adult.
+export interface Companions {
+  /** People with the user, not counting the user. */
+  count: number;
+  /** Anyone who cannot move quickly or manage stairs unaided. */
+  needsAssistance: boolean;
+  /** Anyone who must be carried — an infant, or someone non-ambulatory. */
+  needsCarrying: boolean;
+}
+
 // Strict UI-facing profile used across app state (assignable to PersonalProfile).
 export interface PersonalContext {
   language: Language;
   location: string; // resolved locality name from GPS reverse-geocoding (works anywhere)
-  floor: '9th Floor' | 'Ground Floor' | 'Basement';
-  companions: 'Traveling Solo' | 'With a Child' | 'With Elderly Parents';
+  /**
+   * Storey the user is on: 0 = ground, negative = basement levels, positive = up.
+   *
+   * This was previously the literal string '9th Floor', a leftover from a scripted
+   * demo. It meant nobody on floor 3 or floor 20 could describe themselves, and
+   * the tsunami advice asserted "you are well above wave crest height" to anyone
+   * who picked the only "high" option available.
+   */
+  floor: number;
+  companions: Companions;
   mobility: 'Fully Mobile' | 'Wheelchair User';
 }
 
@@ -70,4 +91,10 @@ export interface AuthUser {
   name: string;
   email: string;
   avatar?: string;
+  /**
+   * Google's `sub` claim — a stable per-account id. Used to scope stored data,
+   * because an email address can change on the same account and would then
+   * orphan (or worse, cross-wire) whatever was keyed to it.
+   */
+  sub?: string;
 }

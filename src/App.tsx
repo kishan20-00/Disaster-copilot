@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ActionStep, HazardSignal, AgentState, PersonalContext, Hazard } from '@/types/domain';
 import { LANGUAGES_MAP } from '@/constants/languages';
 import { INITIAL_AGENTS } from '@/constants/agents';
@@ -33,6 +33,11 @@ import { HazardAdvisory } from '@/components/drawer/HazardAdvisory';
 import { AgentPipelineConsole } from '@/components/drawer/AgentPipelineConsole';
 import { ActionCards } from '@/components/drawer/ActionCards';
 import { StandbyPanel } from '@/components/drawer/StandbyPanel';
+import { ProfileSheet } from '@/components/profile/ProfileSheet';
+import type { FamilyMember } from '@/lib/familyStore';
+import { loadFamily, saveFamily, familyScope, purgeLegacyFamily } from '@/lib/familyStore';
+import type { FamilyStatus } from '@/lib/familyStatus';
+import { sessionExpiry } from '@/lib/session';
 import { ThreatScanPanel } from '@/components/drawer/ThreatScanPanel';
 import type { ThreatScanState } from '@/lib/impact';
 import type { LatLng } from './services/geolocation';
@@ -57,8 +62,11 @@ export default function App() {
   const [personalContext, setPersonalContext] = useState<PersonalContext>({
     language: 'English',
     location: '',
-    floor: '9th Floor',
-    companions: 'With a Child',
+    // Ground floor and alone are the conservative defaults: assuming someone is
+    // high up would tell them to stay put in a tsunami, and assuming companions
+    // put "with child" in the emergency message whether or not one existed.
+    floor: 0,
+    companions: { count: 0, needsAssistance: false, needsCarrying: false },
     mobility: 'Fully Mobile'
   });
 
@@ -67,7 +75,6 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState(-1);
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [smsStatus, setSmsStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
-  const [distressSent, setDistressSent] = useState(false);
 
   // Google Maps styles and interactive state
   const [mapLayer, setMapLayer] = useState<'streets' | 'satellite' | 'terrain' | 'traffic' | 'hazard'>('streets');
@@ -78,6 +85,12 @@ export default function App() {
   // you are not is the wrong default for an emergency tool.
   const [focusPlace, setFocusPlace] = useState<{ pos: LatLng; name: string; address: string } | null>(null);
   const [overrideNotice, setOverrideNotice] = useState<string | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+  // Family places the user recorded. Loaded per account, not globally — see the
+  // effect below.
+  const [family, setFamily] = useState<FamilyMember[]>([]);
+  // Per-member verdicts produced by the emergency run.
+  const [familyStatus, setFamilyStatus] = useState<FamilyStatus[] | null>(null);
   const [activeMarker, setActiveMarker] = useState<string | null>(null);
   const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
   const [voiceAssistant, setVoiceAssistant] = useState(false);
@@ -124,7 +137,7 @@ export default function App() {
   const routingEnabled = currentStep >= 0 && responseMode(activeHazard) === 'evacuate';
 
   const { mapRef, recenter, panTo } = useGoogleMaps({
-    dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition: focusPlace?.pos ?? null,
+    dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition: focusPlace?.pos ?? null, family,
     user, livePosition, liveRoute, liveShelter, googleMapsLoaded,
     setGoogleMapsLoaded, setMapCenter, setActiveMarker
   });
@@ -141,13 +154,30 @@ export default function App() {
   // Live multi-agent pipeline (Situation → Personal → Route → Translate → Commander) + route-ready haptic.
   useAgentPipeline({
     isSimulating, currentStep, personalContext, googleMapsLoaded, dynamicMarkers,
-    livePosition, liveAddress,
+    livePosition, liveAddress, family, setFamilyStatus,
     focusPosition: focusPos, focusName: focusPlace?.name ?? null,
     onOverrideToLive: (reason) => { setFocusPlace(null); setOverrideNotice(reason); },
     setAgents, setHazardSignal, setCurrentStep, setLiveSteps, setLiveSmsDraft,
     setLiveRoute, setLiveShelter, setLiveAddress, setIsSimulating, setShowSmsModal,
     setActiveHazard, setThreatScan, setShelterSource
   });
+
+  // One list per Google account. Reloaded whenever the signed-in account changes,
+  // so switching accounts no longer shows the previous person's family — the
+  // first version used a single global key and read it once at mount.
+  const scope = familyScope(user);
+  useEffect(() => {
+    purgeLegacyFamily();
+    setFamily(loadFamily(scope));
+  }, [scope]);
+
+  const updateFamily = (members: FamilyMember[]) => {
+    setFamily(members);
+    saveFamily(scope, members);
+  };
+
+  const updateContext = (patch: Partial<PersonalContext>) =>
+    setPersonalContext((prev) => ({ ...prev, ...patch }));
 
   // Translate labels dynamically based on selected language
   const labels = LANGUAGES_MAP[personalContext.language];
@@ -198,6 +228,7 @@ export default function App() {
     setShowSmsModal(false);
     setThreatScan(null);
     setShelterSource(null);
+    setFamilyStatus(null);
     setIsSimulating(false);
     setCurrentStep(-1);
   };
@@ -299,7 +330,7 @@ export default function App() {
                 near={focusPos}
                 placeholderLocation={personalContext.location}
                 user={user}
-                onSignOut={handleSignOut}
+                onOpenProfile={() => setShowProfile(true)}
               />
 
               {/* Loud, persistent reminder that routes are not from where you are */}
@@ -433,12 +464,9 @@ export default function App() {
 
                   {/* SAFETY GUARD DASHBOARD — All Family Secure */}
                   <SafetyGuardPanel
-                    distressSent={distressSent}
-                    onSendDistress={() => {
-                      setDistressSent(true);
-                      navigator.vibrate?.([200, 100, 200, 100, 200]);
-                      setTimeout(() => setDistressSent(false), 8000);
-                    }}
+                    family={family}
+                    familyStatus={familyStatus}
+                    onOpenProfile={() => setShowProfile(true)}
                   />
 
                   {/* ACTIVE LIVE HAZARD ADVISORY */}
@@ -487,6 +515,19 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            <ProfileSheet
+              show={showProfile}
+              user={user}
+              sessionExpiry={sessionExpiry()}
+              personalContext={personalContext}
+              onChangeContext={updateContext}
+              family={family}
+              onChangeFamily={updateFamily}
+              near={focusPos}
+              onClose={() => setShowProfile(false)}
+              onSignOut={() => { setShowProfile(false); handleSignOut(); }}
+            />
 
             {/* Dynamic iOS Safety Gate Modal (Sliding Draw Sheet) */}
             <SmsGateModal

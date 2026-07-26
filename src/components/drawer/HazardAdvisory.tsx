@@ -26,12 +26,25 @@ export function HazardAdvisory({ activeHazard, hazardSignal }: HazardAdvisoryPro
           {hazardSignal ? hazardSignal.source : 'AWAITING FEED'}
         </span>
       </div>
-      <div className="p-3 text-[11px] font-mono leading-relaxed select-text">
-        {hazardSignal
-          ? hazardSignal.bulletinJa
-          : activeHazard === 'earthquake' ? '気象庁の地震速報を取得しています…'
-          : activeHazard === 'typhoon' ? '気象庁の台風情報を取得しています…'
-          : '気象庁の津波警報を取得しています…'}
+      {/* The English rendering leads. This app is aimed at people in Japan who do
+          not read Japanese, yet `bulletinEn` was computed for every hazard in
+          jma.ts and rendered nowhere, so the one thing guaranteed to be Japanese
+          was the official bulletin. The original text still follows, because it
+          is the authoritative wording. */}
+      <div className="p-3 space-y-2 text-[11px] font-mono leading-relaxed select-text">
+        {hazardSignal ? (
+          <>
+            {hazardSignal.bulletinEn && <p>{hazardSignal.bulletinEn}</p>}
+            {hazardSignal.bulletinJa && hazardSignal.bulletinJa !== hazardSignal.bulletinEn && (
+              <p className="text-[10px] opacity-70 border-t border-current/15 pt-2">
+                <span className="uppercase tracking-wider text-[8.5px] opacity-70 block mb-0.5">Original (JMA)</span>
+                {hazardSignal.bulletinJa}
+              </p>
+            )}
+          </>
+        ) : (
+          <p>Fetching the official bulletin…</p>
+        )}
       </div>
     </div>
   );

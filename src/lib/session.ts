@@ -26,6 +26,11 @@ export function loadSession(): StoredSession | null {
   }
 }
 
+/** Unix seconds when the Google token expires, or null if unknown. */
+export function sessionExpiry(): number | null {
+  return loadSession()?.exp ?? null;
+}
+
 export function saveSession(s: StoredSession): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(s));
