@@ -2,6 +2,7 @@ import { Users, UserPlus, HelpCircle } from 'lucide-react';
 import type { FamilyMember } from '@/lib/familyStore';
 import { describeAge } from '@/lib/familyStore';
 import type { FamilyStatus } from '@/lib/familyStatus';
+import type { ThreatScanState } from '@/lib/impact';
 import { hazardInfo } from '@/constants/hazards';
 
 interface SafetyGuardPanelProps {
@@ -12,6 +13,12 @@ interface SafetyGuardPanelProps {
    * these places, rather than the panel working it out only while it is open.
    */
   familyStatus: FamilyStatus[] | null;
+  /**
+   * Needed to tell "no scan has run" apart from "a scan ran and found nothing".
+   * Both leave familyStatus null, and showing the same grey "not checked" badge
+   * for each made a clean result look like a failure.
+   */
+  scanStatus: ThreatScanState['status'] | null;
   onOpenProfile: () => void;
 }
 
@@ -26,11 +33,21 @@ interface SafetyGuardPanelProps {
 // the user told us about, we can say whether that place falls inside it. That is
 // not "is your child safe" — nothing here can know that — but "is the school you
 // told me about inside the warning area", which is true and useful.
-export function SafetyGuardPanel({ family, familyStatus, onOpenProfile }: SafetyGuardPanelProps) {
+export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfile }: SafetyGuardPanelProps) {
   const byId = new Map((familyStatus ?? []).map((f) => [f.member.id, f.impact]));
   const assessed = family.map((m) => ({ member: m, impact: byId.get(m.id) ?? null }));
-  const checked = familyStatus !== null;
   const inHarm = assessed.filter((a) => a.impact?.affected).length;
+
+  // One badge per genuine state, so a clear result never reads as a failure.
+  const unassessed =
+    scanStatus === 'scanning' ? { label: 'Checking…', tone: 'bg-indigo-500/15 text-indigo-300', dot: 'bg-indigo-400 animate-pulse',
+        note: 'Checking this place against the live feeds.' }
+    : scanStatus === 'clear' ? { label: 'No hazard', tone: 'bg-emerald-500/15 text-emerald-400', dot: 'bg-emerald-500',
+        note: 'No active hazard, so there is nothing for this place to be inside.' }
+    : scanStatus === 'unavailable' ? { label: 'Unknown', tone: 'bg-amber-500/15 text-amber-400', dot: 'bg-amber-500',
+        note: 'Hazard feeds could not be reached, so this place could not be judged.' }
+    : { label: 'Not checked yet', tone: 'bg-slate-800/60 text-slate-500', dot: 'bg-slate-600',
+        note: 'Trigger an alert to check this place against live hazards.' };
 
   return (
     <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3.5 space-y-2.5">
@@ -41,9 +58,15 @@ export function SafetyGuardPanel({ family, familyStatus, onOpenProfile }: Safety
             Family places
           </span>
         </div>
-        {checked && family.length > 0 && (
-          <span className={`text-[9px] font-mono font-bold ${inHarm ? 'text-red-400' : 'text-emerald-400'}`}>
-            {inHarm ? `${inHarm} IN AFFECTED AREA` : 'NONE IN AFFECTED AREA'}
+        {family.length > 0 && (
+          <span className={`text-[9px] font-mono font-bold ${
+            familyStatus === null
+              ? scanStatus === 'clear' ? 'text-emerald-400' : 'text-slate-500'
+              : inHarm ? 'text-red-400' : 'text-emerald-400'
+          }`}>
+            {familyStatus === null
+              ? (scanStatus === 'clear' ? 'NO ACTIVE HAZARD' : unassessed.label.toUpperCase())
+              : inHarm ? `${inHarm} IN AFFECTED AREA` : 'NONE IN AFFECTED AREA'}
           </span>
         )}
       </div>
@@ -70,7 +93,7 @@ export function SafetyGuardPanel({ family, familyStatus, onOpenProfile }: Safety
               <div key={member.id} className="flex items-start gap-2.5">
                 <span
                   className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${
-                    !impact ? 'bg-slate-600' : affected ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'
+                    !impact ? unassessed.dot : affected ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'
                   }`}
                 />
                 <div className="flex-1 min-w-0">
@@ -82,25 +105,27 @@ export function SafetyGuardPanel({ family, familyStatus, onOpenProfile }: Safety
                   <p className="text-[9px] font-mono text-slate-600">
                     expected location · {describeAge(member.addedAt)}
                   </p>
-                  {impact && (
+                  {impact ? (
                     <p className={`text-[9px] font-mono leading-snug mt-0.5 ${affected ? 'text-red-300' : 'text-emerald-500/80'}`}>
                       {affected
                         ? `Inside the ${hazardInfo(impact.hazard).label.toLowerCase()} affected area`
                         : 'Outside the affected area'}
                       {impact.distanceKm !== null && ` · ${Math.round(impact.distanceKm)} km from it`}
                     </p>
+                  ) : (
+                    <p className="text-[9px] font-mono leading-snug mt-0.5 text-slate-600">{unassessed.note}</p>
                   )}
                 </div>
                 <span
                   className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md shrink-0 ${
                     !impact
-                      ? 'bg-slate-800/60 text-slate-500'
+                      ? unassessed.tone
                       : affected
                       ? 'bg-red-500/15 text-red-400'
                       : 'bg-emerald-500/15 text-emerald-400'
                   }`}
                 >
-                  {!impact ? 'Not checked' : affected ? 'At risk' : 'Clear'}
+                  {!impact ? unassessed.label : affected ? 'At risk' : 'Clear'}
                 </span>
               </div>
             );
