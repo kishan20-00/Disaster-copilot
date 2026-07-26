@@ -406,14 +406,20 @@ export function useGoogleMaps({
 
     if (routingEnabled) {
       // Prefer the REAL Google Directions polyline; fall back to a straight line to the shelter.
+      //
+      // The origin is the place being ASSESSED, not the device. Using livePosition
+      // here drew the fallback line from the user's own address to a shelter beside
+      // the searched place, and fitBounds then framed both — which snapped the
+      // camera back home the moment an alert was triggered for somewhere else.
+      const routeOrigin = focusPosition ?? livePosition;
       let pathCoords: { lat: number; lng: number }[] | null = null;
       const hasStreetRoute = !!(liveRoute && liveRoute.path.length > 1);
       if (hasStreetRoute) {
         pathCoords = liveRoute!.path;
       } else {
         const shelterData = liveShelter || dynamicMarkers.find((m: any) => m.category === 'shelter');
-        if (shelterData && userPos) {
-          pathCoords = [userPos, { lat: shelterData.lat, lng: shelterData.lng }];
+        if (shelterData && routeOrigin) {
+          pathCoords = [routeOrigin, { lat: shelterData.lat, lng: shelterData.lng }];
         }
       }
 

@@ -109,7 +109,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
 
     // Everything downstream reasons about the focused place. When the user has
     // searched somewhere, that is deliberately NOT their GPS position.
-    const originPos = focusPosition ?? livePosition;
+    const startPos = focusPosition ?? livePosition;
     const browsingElsewhere = !!(focusPosition && livePosition &&
       (Math.abs(focusPosition.lat - livePosition.lat) > 1e-4 ||
        Math.abs(focusPosition.lng - livePosition.lng) > 1e-4));
@@ -136,7 +136,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         // point is that an evacuation is not triggered by a distant or past event.
         markRunning(0);
 
-        if (!originPos) {
+        if (!startPos) {
           setThreatScan({
             status: 'unavailable', scannedAt: new Date().toISOString(),
             sourcesQueried: [], sourcesFailed: [], verdict: null
@@ -152,34 +152,40 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         // address. While browsing, scan both and let a real threat at the device's
         // location win — looking elsewhere must not cost you your own warning.
         const [scan, homeScan] = await Promise.all([
-          scanForHazards(originPos),
+          scanForHazards(startPos),
           browsingElsewhere && livePosition ? scanForHazards(livePosition) : Promise.resolve(null),
           wait(300)
         ]);
         if (!stillCurrent()) return;
 
+        // Reassignable: if a real hazard turns out to be at the user's own
+        // position, the rest of the run switches to it rather than stopping.
+        let originPos = startPos;
+        let verdict = evaluateThreats(scan.hazards, originPos);
+        let scanMeta = scan;
+
         if (homeScan && livePosition) {
           const homeVerdict = evaluateThreats(homeScan.hazards, livePosition);
           if (homeVerdict.worst) {
+            // Don't just warn and stop — take over the run so the user gets a
+            // real assessment, shelter and route for where they actually are.
             onOverrideToLive(
               `${homeVerdict.worst.hazard.headline} affects your actual location — switched back from ${focusName ?? 'the place you were checking'}.`
             );
-            setIsSimulating(false);
-            setCurrentStep(-1);
-            markCompleted(0, `Switched back to your real position: ${homeVerdict.worst.impact.basis}`);
-            return;
+            originPos = livePosition;
+            verdict = homeVerdict;
+            scanMeta = homeScan;
           }
         }
 
-        const verdict = evaluateThreats(scan.hazards, originPos);
         // Reaching no feed at all is "unknown", never "all clear".
-        const noFeedAnswered = scan.sourcesQueried.length === 0;
+        const noFeedAnswered = scanMeta.sourcesQueried.length === 0;
 
         setThreatScan({
           status: noFeedAnswered ? 'unavailable' : verdict.worst ? 'threat' : 'clear',
-          scannedAt: scan.scannedAt,
-          sourcesQueried: scan.sourcesQueried,
-          sourcesFailed: scan.sourcesFailed,
+          scannedAt: scanMeta.scannedAt,
+          sourcesQueried: scanMeta.sourcesQueried,
+          sourcesFailed: scanMeta.sourcesFailed,
           verdict
         });
 
@@ -188,7 +194,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
           const nearest = verdict.all[0];
           markCompleted(0, noFeedAnswered
             ? 'Could not reach any hazard feed, so threat status is unknown. Retry when you have a connection.'
-            : `Scanned ${scan.sourcesQueried.length} live feeds — ${scan.hazards.length} recent event(s), none reaching your location. ` +
+            : `Scanned ${scanMeta.sourcesQueried.length} live feeds — ${scanMeta.hazards.length} recent event(s), none reaching this location. ` +
               (nearest ? `Closest: ${nearest.impact.basis}` : ''));
           setIsSimulating(false);
           setCurrentStep(-1);
@@ -250,8 +256,8 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         // ── Step 1: Personal Context Agent (resolves real address) ──
         markRunning(1);
         let address: string | null = liveAddress;
-        if (!address && livePosition) {
-          address = await reverseGeocode(livePosition);
+        if (!address && originPos) {
+          address = await reverseGeocode(originPos);
           if (address) setLiveAddress(address);
         }
         let personalResult = address
