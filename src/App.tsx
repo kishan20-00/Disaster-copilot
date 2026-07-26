@@ -115,7 +115,7 @@ export default function App() {
 
   // Auth/session (Google OAuth) and geolocation are managed by hooks.
   const { user, authLoading, signOut } = useAuth();
-  const { requestLocation, locationStatus } = useGeolocation({
+  const { requestLocation, location } = useGeolocation({
     enabled: !!user,
     googleMapsLoaded, livePosition,
     setLivePosition, setLiveAddress, setPersonalContext
@@ -296,7 +296,7 @@ export default function App() {
           /* ==========================================
              LOCATION GATE — the app is fully driven by the user's real GPS
              ========================================== */
-          <EnableLocationState mapsReady={googleMapsLoaded} status={locationStatus} onRetry={requestLocation} />
+          <EnableLocationState mapsReady={googleMapsLoaded} location={location} onRetry={requestLocation} />
         ) : (
           /* ==========================================
              MAIN PREMIUM GOOGLE MAPS DISASTER CO-PILOT DASHBOARD
@@ -466,6 +466,7 @@ export default function App() {
                   <SafetyGuardPanel
                     family={family}
                     familyStatus={familyStatus}
+                    scanStatus={threatScan?.status ?? null}
                     onOpenProfile={() => setShowProfile(true)}
                   />
 
