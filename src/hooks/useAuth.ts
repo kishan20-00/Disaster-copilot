@@ -23,7 +23,8 @@ export function useAuth() {
         const authedUser: AuthUser = {
           name: payload.name || payload.given_name || "Google User",
           email: payload.email,
-          avatar: payload.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${payload.email}`
+          avatar: payload.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${payload.email}`,
+          sub: typeof payload.sub === 'string' ? payload.sub : undefined
         };
         setUser(authedUser);
         // Persist with the token's own expiry so the session self-terminates.

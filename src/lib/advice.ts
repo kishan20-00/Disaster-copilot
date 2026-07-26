@@ -2,6 +2,10 @@ import type { ActionStep, Hazard, PersonalContext } from '@/types/domain';
 import type { LatLng } from '@/services/geolocation';
 import { getShelterInfo } from '@/lib/shelter';
 import { hazardInfo } from '@/constants/hazards';
+import {
+  isBasement, isGround, isAboveTsunamiLine, groupSlowsYou,
+  describeFloor, TSUNAMI_MIN_SAFE_FLOOR
+} from '@/lib/profileFormat';
 
 export interface AdviceInput {
   liveSteps: ActionStep[] | null;
@@ -20,13 +24,13 @@ export function buildAdvice({ liveSteps, personalContext, activeHazard, dynamicM
   if (activeHazard === 'earthquake') {
     const steps: ActionStep[] = [];
     // Step 1: Drop Cover Hold or evac
-    if (floor === '9th Floor') {
+    if (isBasement(floor)) {
       steps.push({
         num: "1",
-        title: language === 'English' ? "Drop, Cover, Hold" : language === 'Chinese' ? "伏地、遮挡、手扶" : language === 'Vietnamese' ? "Nằm xuống, Che chắn, Giữ chặt" : "伏せ、頭を守り、動かない",
-        desc: language === 'English' ? "High rise shaking. Stay away from glass window walls." : language === 'Chinese' ? "高楼层摇晃剧烈。请远离玻璃幕墙。" : language === 'Vietnamese' ? "Tòa nhà cao tầng rung lắc. Tránh xa các vách kính." : "高層ビル特有の揺れ。窓ガラスから離れてください。"
+        title: language === 'English' ? "Protect Head & Move Up" : language === 'Chinese' ? "护住头部并往上撤" : language === 'Vietnamese' ? "Bảo vệ đầu & di chuyển lên" : "頭を保護し、地上へ避難",
+        desc: language === 'English' ? "Basement trap risk. Move to ground level once heavy shaking stops." : language === 'Chinese' ? "地下陷阱风险。剧烈摇晃停止后请立即前往地面。" : language === 'Vietnamese' ? "Nguy cơ mắc kẹt dưới hầm. Di chuyển lên mặt đất khi hết rung lắc." : "地下での閉じ込めリスク。揺れが収まり次第、地上へ移動。"
       });
-    } else if (floor === 'Ground Floor') {
+    } else if (isGround(floor)) {
       steps.push({
         num: "1",
         title: language === 'English' ? "Evacuate Outwards" : language === 'Chinese' ? "立即疏散到室外" : language === 'Vietnamese' ? "Sơ tán ra bên ngoài" : "屋外へ避難してください",
@@ -35,8 +39,8 @@ export function buildAdvice({ liveSteps, personalContext, activeHazard, dynamicM
     } else {
       steps.push({
         num: "1",
-        title: language === 'English' ? "Protect Head & Move Up" : language === 'Chinese' ? "护住头部并往上撤" : language === 'Vietnamese' ? "Bảo vệ đầu & di chuyển lên" : "頭を保護し、地上へ避難",
-        desc: language === 'English' ? "Basement trap risk. Move to ground level once heavy shaking stops." : language === 'Chinese' ? "地下陷阱风险。剧烈摇晃停止后请立即前往地面。" : language === 'Vietnamese' ? "Nguy cơ mắc kẹt dưới hầm. Di chuyển lên mặt đất khi hết rung lắc." : "地下での閉じ込めリスク。揺れが収まり次第、地上へ移動。"
+        title: language === 'English' ? "Drop, Cover, Hold" : language === 'Chinese' ? "伏地、遮挡、手扶" : language === 'Vietnamese' ? "Nằm xuống, Che chắn, Giữ chặt" : "伏せ、頭を守り、動かない",
+        desc: language === 'English' ? `Shaking is amplified on ${describeFloor(floor)}. Stay away from glass window walls.` : language === 'Chinese' ? "高楼层摇晃剧烈。请远离玻璃幕墙。" : language === 'Vietnamese' ? "Tòa nhà cao tầng rung lắc. Tránh xa các vách kính." : "高層階では揺れが増幅されます。窓ガラスから離れてください。"
       });
     }
 
@@ -44,10 +48,12 @@ export function buildAdvice({ liveSteps, personalContext, activeHazard, dynamicM
     steps.push({
       num: "2",
       title: language === 'English' ? "Take Stairs, NOT Elevator" : language === 'Chinese' ? "走安全通道，禁用电梯" : language === 'Vietnamese' ? "Đi cầu thang bộ, KHÔNG dùng thang máy" : "階段を使用（エレベーター禁止）",
-      desc: companions === 'With a Child'
-        ? (language === 'English' ? "Secure stroller, carry child. Walk calmly down." : language === 'Chinese' ? "抱住孩子，收起婴儿车。有序下楼。" : language === 'Vietnamese' ? "Gấp xe đẩy, bế trẻ em. Đi bộ bình tĩnh." : "ベビーカーは畳み、子供を抱きかかえて歩いてください。")
-        : companions === 'With Elderly Parents'
-        ? (language === 'English' ? "Support companion. Avoid rushing, pace yourselves." : language === 'Chinese' ? "扶助长辈。避免拥挤，稳步前行。" : language === 'Vietnamese' ? "Hỗ trợ cha mẹ lớn tuổi. Tránh chen lấn, đi vững chắc." : "高齢の家族をサポートしてください。焦らず、一歩ずつ下りてください。")
+      desc: companions.needsCarrying
+        ? (language === 'English' ? "Carry them and keep both hands supporting. Walk calmly down." : language === 'Chinese' ? "抱住需要搀扶的人，双手托稳。有序下楼。" : language === 'Vietnamese' ? "Bế người cần hỗ trợ, giữ chắc bằng hai tay. Đi bộ bình tĩnh." : "抱きかかえ、両手でしっかり支えて歩いてください。")
+        : companions.needsAssistance
+        ? (language === 'English' ? "Support anyone who needs it. Avoid rushing, pace yourselves." : language === 'Chinese' ? "扶助需要帮助的人。避免拥挤，稳步前行。" : language === 'Vietnamese' ? "Hỗ trợ người cần giúp đỡ. Tránh chen lấn, đi vững chắc." : "支援が必要な人を支えてください。焦らず、一歩ずつ下りてください。")
+        : companions.count > 0
+        ? (language === 'English' ? "Keep your group together. Walk, do not run." : language === 'Chinese' ? "保持同行者在一起。小步快走，切勿奔跑。" : language === 'Vietnamese' ? "Giữ cả nhóm đi cùng nhau. Đi bộ, không chạy." : "同行者と離れないでください。走らず歩いてください。")
         : (language === 'English' ? "Keep hands free. Walk, do not run." : language === 'Chinese' ? "双手保持空闲。小步快走，切勿奔跑。" : language === 'Vietnamese' ? "Giữ hai tay tự do. Đi bộ, không chạy." : "両手を空けてください。走らず歩いてください。")
     });
 
@@ -73,7 +79,7 @@ export function buildAdvice({ liveSteps, personalContext, activeHazard, dynamicM
       {
         num: "2",
         title: language === 'English' ? "Move Away From Windows" : language === 'Chinese' ? "远离外窗" : language === 'Vietnamese' ? "Tránh xa cửa sổ" : "窓から離れる",
-        desc: floor === 'Basement'
+        desc: isBasement(floor)
           ? (language === 'English' ? "Basement flooding threat! Move to upper floors immediately." : language === 'Chinese' ? "地下室积水威胁！请立即转移至高层楼层。" : language === 'Vietnamese' ? "Nguy cơ ngập lụt tầng hầm! Di chuyển ngay lên tầng trên." : "地下浸水のリスク！直ちに上の階に避難してください。")
           : (language === 'English' ? "Debris impact hazard. Stay in inner-rooms or hallways." : language === 'Chinese' ? "碎物撞击危险。请待在无窗的内室或走廊。" : language === 'Vietnamese' ? "Mảnh vỡ có thể văng vào. Trú ẩn trong phòng kín hoặc lối đi giữa nhà." : "飛来物の危険。窓のない内室か廊下で待機してください。")
       },
@@ -85,17 +91,30 @@ export function buildAdvice({ liveSteps, personalContext, activeHazard, dynamicM
     ];
   } else if (activeHazard === 'tsunami') {
     return [
-      {
-        num: "1",
-        title: language === 'English' ? "Seek Immediate High Ground" : language === 'Chinese' ? "立即寻找高处避难" : language === 'Vietnamese' ? "Tìm nơi cao ráo ngay" : "直ちに高台避難",
-        desc: language === 'English' ? "Tsunami wave alert height 3m+. You must climb immediately." : language === 'Chinese' ? "海啸波高预警3米以上。请立刻向高处攀爬。" : language === 'Vietnamese' ? "Cảnh báo sóng thần cao trên 3m. Di chuyển lên cao ngay lập tức." : "大津波警報（予想高3m超）。今すぐ高台へ避難してください。"
-      },
+      // Step 1 has to agree with step 2. Telling someone on the 20th floor to
+      // "climb immediately" and then, a line later, that they may stay put is
+      // worse than either message alone — it could send them into a stairwell.
+      // The old wording also asserted a 3 m wave height that came from nowhere.
+      isAboveTsunamiLine(floor)
+        ? {
+            num: "1",
+            title: language === 'English' ? "Stay High — Do Not Go Down" : language === 'Chinese' ? "留在高处，切勿下楼" : language === 'Vietnamese' ? "Ở trên cao — Không đi xuống" : "高所に留まる（下降禁止）",
+            desc: language === 'English' ? `You are already on ${describeFloor(floor)}. Going down now would put you in the water's path.` : language === 'Chinese' ? "您已在高层。此时下楼会进入海啸路径。" : language === 'Vietnamese' ? "Bạn đã ở trên cao. Đi xuống lúc này sẽ vào đường sóng thần." : "既に高所にいます。今下ると津波の進路に入ります。"
+          }
+        : {
+            num: "1",
+            title: language === 'English' ? "Seek Immediate High Ground" : language === 'Chinese' ? "立即寻找高处避难" : language === 'Vietnamese' ? "Tìm nơi cao ráo ngay" : "直ちに高台避難",
+            desc: language === 'English' ? "Move upward or inland now — do not wait to see the wave." : language === 'Chinese' ? "立即向高处或内陆移动，不要等看到海浪。" : language === 'Vietnamese' ? "Di chuyển lên cao hoặc vào trong đất liền ngay — đừng chờ thấy sóng." : "直ちに高所または内陸へ移動してください。波を見てからでは遅すぎます。"
+          },
       {
         num: "2",
         title: language === 'English' ? "Vertical Evacuation" : language === 'Chinese' ? "垂直避难" : language === 'Vietnamese' ? "Sơ tán khẩn cấp theo chiều dọc" : "垂直避難の実行",
-        desc: floor === '9th Floor'
-          ? (language === 'English' ? "Stay on current 9th floor. You are well above wave crest height." : language === 'Chinese' ? "留在当前9楼。您的高度已远超预计浪高。" : language === 'Vietnamese' ? "Hãy ở lại tầng 9 hiện tại. Bạn đang ở độ cao an toàn trước sóng thần." : "現在の9階に留まってください。波高を大幅に上回っています。")
-          : (language === 'English' ? "Ground floor vulnerable. Climb to 4th floor or higher in nearest strong structure." : language === 'Chinese' ? "低楼层极其危险。请立即爬到附近坚固建筑的4层 or 以上。" : language === 'Vietnamese' ? "Tầng trệt vô cùng nguy hiểm. Di chuyển lên tầng 4 hoặc cao hơn của tòa nhà kiên cố." : "低階は極めて危険。頑丈なビルの4階以上に上ってください。")
+        // Never assert "you are above the wave" off the back of a picked option.
+        // The claim is now tied to the storey the user actually gave, and still
+        // tells them to go higher if a taller wave is forecast.
+        desc: isAboveTsunamiLine(floor)
+          ? (language === 'English' ? `You are on ${describeFloor(floor)}, at or above the ${TSUNAMI_MIN_SAFE_FLOOR}th-floor minimum. Stay put unless a taller wave is forecast, then go higher.` : language === 'Chinese' ? `您位于${floor}楼，已达到4层最低标准。除预报浪高更大外请留在原地，否则继续向上。` : language === 'Vietnamese' ? `Bạn đang ở tầng ${floor}, đạt mức tối thiểu tầng 4. Hãy ở lại trừ khi dự báo sóng cao hơn, khi đó hãy lên cao hơn.` : `現在${floor}階、最低基準の4階以上です。より高い波の予報がなければ留まり、あれば更に上階へ。`)
+          : (language === 'English' ? `${describeFloor(floor)} is inside the inundation zone. Climb to the ${TSUNAMI_MIN_SAFE_FLOOR}th floor or higher in the nearest strong structure.` : language === 'Chinese' ? "当前楼层处于淹没范围内。请立即爬到附近坚固建筑的4层或以上。" : language === 'Vietnamese' ? "Tầng hiện tại nằm trong vùng ngập. Di chuyển lên tầng 4 hoặc cao hơn của tòa nhà kiên cố." : "現在の階は浸水想定区域内です。頑丈なビルの4階以上に上ってください。")
       },
       {
         num: "3",
@@ -131,7 +150,7 @@ export function buildAdvice({ liveSteps, personalContext, activeHazard, dynamicM
   return [
     { num: '1', title: `${info.label} — act now`, desc: info.rationale },
     { num: '2', title: mobility === 'Wheelchair User' ? 'Use step-free exits' : 'Take stairs, not the elevator',
-      desc: companions === 'Traveling Solo' ? 'Move without delay.' : 'Keep your group together and move at the slowest person\u2019s pace.' },
+      desc: groupSlowsYou(companions) ? 'Keep your group together and move at the slowest person\u2019s pace.' : companions.count > 0 ? 'Keep your group together.' : 'Move without delay.' },
     { num: '3', title: `Move to ${shelter.name} (${shelter.distance})`, desc: 'Follow the highlighted route on the map.' }
   ];
 }

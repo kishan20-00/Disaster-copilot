@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, X, User, LogOut, MapPin, Loader2 } from 'lucide-react';
+import { Search, X, User, MapPin, Loader2 } from 'lucide-react';
 import type { LatLng } from '@/services/geolocation';
 import type { PlaceSuggestion } from '@/services/placeSearch';
 import { fetchPlaceSuggestions } from '@/services/placeSearch';
@@ -14,7 +14,7 @@ interface MapSearchBarProps {
   near: LatLng | null;
   placeholderLocation: string;
   user: { avatar?: string } | null;
-  onSignOut: () => void;
+  onOpenProfile: () => void;
 }
 
 /** Long enough to stop firing a request per keystroke, short enough to feel live. */
@@ -22,7 +22,7 @@ const DEBOUNCE_MS = 250;
 
 export function MapSearchBar({
   searchQuery, onSearchChange, onClearSearch, onSelectSuggestion,
-  near, placeholderLocation, user, onSignOut
+  near, placeholderLocation, user, onOpenProfile
 }: MapSearchBarProps) {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -107,25 +107,17 @@ export function MapSearchBar({
 
         <div className="h-4 w-px bg-slate-800 mx-1.5 shrink-0" />
 
-        <div className="flex items-center gap-2 shrink-0 ml-1.5 relative group/profile">
-          <button
-            onClick={onSignOut}
-            className="w-7 h-7 rounded-full border border-slate-700 hover:border-red-500/30 hover:bg-red-500/10 flex items-center justify-center transition bg-slate-950/80 text-slate-400 hover:text-red-400 relative overflow-hidden"
-            title="Log Out Session"
-          >
-            {user?.avatar ? (
-              <>
-                <img src={user.avatar} alt="Avatar" className="w-full h-full rounded-full group-hover/profile:opacity-0 transition-opacity" />
-                <LogOut className="w-3.5 h-3.5 absolute opacity-0 group-hover/profile:opacity-100 transition-opacity text-red-400" />
-              </>
-            ) : (
-              <>
-                <User className="w-3.5 h-3.5 group-hover/profile:opacity-0 transition-opacity" />
-                <LogOut className="w-3.5 h-3.5 absolute opacity-0 group-hover/profile:opacity-100 transition-opacity text-red-400" />
-              </>
-            )}
-          </button>
-        </div>
+        {/* Opens the profile. It used to sign the user out on a single tap, with
+            no confirmation and no way to see or change anything. */}
+        <button
+          onClick={onOpenProfile}
+          className="w-7 h-7 shrink-0 ml-1.5 rounded-full border border-slate-700 hover:border-indigo-500/60 flex items-center justify-center transition bg-slate-950/80 text-slate-400 hover:text-white overflow-hidden active:scale-95"
+          title="Profile and settings"
+        >
+          {user?.avatar
+            ? <img src={user.avatar} alt="Profile" className="w-full h-full rounded-full" />
+            : <User className="w-3.5 h-3.5" />}
+        </button>
       </div>
 
       {/* Explicit selection. The old submit handler geocoded the raw text and flew

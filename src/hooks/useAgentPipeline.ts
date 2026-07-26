@@ -6,7 +6,7 @@ import { getWalkingRoute, reverseGeocode } from '@/services/maps';
 import { scanForHazards } from '@/services/alerts';
 import { fetchDesignatedShelters } from '@/services/shelters';
 import { responseMode, hazardInfo } from '@/constants/hazards';
-import { evaluateThreats } from '@/lib/impact';
+import { evaluateThreats, assessImpact } from '@/lib/impact';
 import type { ThreatScanState } from '@/lib/impact';
 import {
   generateActionSteps,
@@ -19,6 +19,10 @@ import {
   runTranslateAgent
 } from '@/services/gemini';
 import { getShelterInfo, pickSafestShelter } from '@/lib/shelter';
+import { describeFloor, describeCompanions } from '@/lib/profileFormat';
+import type { FamilyMember } from '@/lib/familyStore';
+import { memberPosition } from '@/lib/familyStore';
+import type { FamilyStatus } from '@/lib/familyStatus';
 
 type LiveShelter = { name: string; distanceMeters: number; lat: number; lng: number };
 
@@ -33,6 +37,9 @@ export interface UseAgentPipelineParams {
   focusPosition: LatLng | null;
   focusName: string | null;
   liveAddress: string | null;
+  /** Checked against the detected hazard as part of the run. */
+  family: FamilyMember[];
+  setFamilyStatus: React.Dispatch<React.SetStateAction<FamilyStatus[] | null>>;
   setAgents: React.Dispatch<React.SetStateAction<AgentState[]>>;
   setHazardSignal: React.Dispatch<React.SetStateAction<HazardSignal | null>>;
   setCurrentStep: React.Dispatch<React.SetStateAction<number>>;
@@ -77,7 +84,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
 
     const {
       currentStep, personalContext, googleMapsLoaded, dynamicMarkers,
-      livePosition, focusPosition, focusName, liveAddress,
+      livePosition, focusPosition, focusName, liveAddress, family, setFamilyStatus,
       setAgents, setHazardSignal, setCurrentStep, setLiveSteps, setLiveSmsDraft,
       setLiveRoute, setLiveShelter, setLiveAddress, setIsSimulating, setShowSmsModal,
       setActiveHazard, setThreatScan, setShelterSource, onOverrideToLive
@@ -99,11 +106,13 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
       setAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'completed', result } : a));
     const stillCurrent = () => !cancelled && runId === pipelineRunIdRef.current;
 
+    // Gemini and the SMS drafter take words; app state holds a storey number and
+    // companion attributes, so they are described here once.
     const profile = {
       language: personalContext.language,
       location: personalContext.location,
-      floor: personalContext.floor,
-      companions: personalContext.companions,
+      floor: describeFloor(personalContext.floor),
+      companions: describeCompanions(personalContext.companions),
       mobility: personalContext.mobility
     };
 
@@ -135,6 +144,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         // reaches THIS user. Nothing downstream runs unless it does — the whole
         // point is that an evacuation is not triggered by a distant or past event.
         markRunning(0);
+        setFamilyStatus(null);
 
         if (!startPos) {
           setThreatScan({
@@ -237,6 +247,15 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
           ? buildFallbackSteps(`${shelterInfo.name} (${shelterInfo.distance})`)
           : buildStayPutSteps(hazard);
 
+        // Check the people the user told us about, as part of the emergency run
+        // rather than only when the panel happens to be open.
+        const familyStatus: FamilyStatus[] = family.map((member) => ({
+          member,
+          impact: assessImpact(detected.hazard, memberPosition(member))
+        }));
+        setFamilyStatus(familyStatus);
+        const familyAtRisk = familyStatus.filter((f) => f.impact.affected);
+
         let situationResult = `${detected.hazard.headline}. ${detected.impact.basis}`;
         if (isGeminiConfigured) {
           try {
@@ -260,9 +279,17 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
           address = await reverseGeocode(originPos);
           if (address) setLiveAddress(address);
         }
-        let personalResult = address
-          ? `User at "${address}" — ${profile.floor}, ${profile.companions}, ${profile.mobility}. Vulnerability rating: HIGH.`
-          : `User context parsed: Lang: ${profile.language}, Location: ${profile.location}, Floor: ${profile.floor}, Companions: ${profile.companions}, Mobility: ${profile.mobility}. Vulnerability rating: HIGH.`;
+        const familyLine = family.length === 0
+          ? ' No family places saved.'
+          : familyAtRisk.length === 0
+          ? ` All ${family.length} saved family place(s) are outside the affected area.`
+          : ` ${familyAtRisk.length} of ${family.length} saved family place(s) fall inside the affected area: ` +
+            `${familyAtRisk.map((f) => `${f.member.name} at ${f.member.place.name}`).join('; ')}.`;
+
+        let personalResult = (address
+          ? `User at "${address}" — ${profile.floor}, ${profile.companions}, ${profile.mobility}.`
+          : `User context: ${profile.language}, ${profile.location}, ${profile.floor}, ${profile.companions}, ${profile.mobility}.`
+        ) + familyLine;
         if (isGeminiConfigured) {
           try {
             personalResult = await runPersonalAgent(profile, address);
