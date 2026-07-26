@@ -20,6 +20,9 @@ import { AROverlay } from '@/components/map/AROverlay';
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import { EnableLocationState } from '@/components/map/EnableLocationState';
 import { MapSearchBar } from '@/components/map/MapSearchBar';
+import { FocusBanner } from '@/components/map/FocusBanner';
+import type { PlaceSuggestion } from '@/services/placeSearch';
+import { resolveSuggestion } from '@/services/placeSearch';
 import { CategoryChips } from '@/components/map/CategoryChips';
 import { MapControls } from '@/components/map/MapControls';
 import { MarkerPopup } from '@/components/map/MarkerPopup';
@@ -34,13 +37,14 @@ import { ThreatScanPanel } from '@/components/drawer/ThreatScanPanel';
 import type { ThreatScanState } from '@/lib/impact';
 import type { LatLng } from './services/geolocation';
 import type { WalkingRoute } from './services/maps';
-import { geocodePlace } from './services/maps';
 import {
   RotateCcw,
   Compass,
   ChevronUp,
   ChevronDown,
-  ShieldCheck
+  ShieldCheck,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 
 export default function App() {
@@ -69,6 +73,11 @@ export default function App() {
   const [mapLayer, setMapLayer] = useState<'streets' | 'satellite' | 'terrain' | 'traffic' | 'hazard'>('streets');
   const [filterCategory, setFilterCategory] = useState<'all' | 'shelter' | 'water' | 'medical' | 'station'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  // A place the user chose to examine instead of where they are standing. Null
+  // means "me". Deliberately not persisted: starting the app pointed somewhere
+  // you are not is the wrong default for an emergency tool.
+  const [focusPlace, setFocusPlace] = useState<{ pos: LatLng; name: string; address: string } | null>(null);
+  const [overrideNotice, setOverrideNotice] = useState<string | null>(null);
   const [activeMarker, setActiveMarker] = useState<string | null>(null);
   const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
   const [voiceAssistant, setVoiceAssistant] = useState(false);
@@ -107,18 +116,22 @@ export default function App() {
   };
 
   // Google Maps instance + markers/route/layers (owns all map refs); returns the map container ref.
+  // The position every decision is made from: the searched place if there is
+  // one, otherwise the device's own GPS fix.
+  const focusPos = focusPlace?.pos ?? livePosition;
+
   // Only draw an evacuation line when leaving is actually the advice.
   const routingEnabled = currentStep >= 0 && responseMode(activeHazard) === 'evacuate';
 
   const { mapRef, recenter, panTo } = useGoogleMaps({
-    dynamicMarkers, mapLayer, currentStep, routingEnabled,
+    dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition: focusPlace?.pos ?? null,
     user, livePosition, liveRoute, liveShelter, googleMapsLoaded,
     setGoogleMapsLoaded, setMapCenter, setActiveMarker
   });
 
   // Dynamic Places API search — populates dynamicMarkers from the current map center.
   usePlacesSearch({
-    googleMapsLoaded, mapCenter, filterCategory, searchQuery,
+    googleMapsLoaded, mapCenter, filterCategory,
     setDynamicMarkers
   });
 
@@ -129,6 +142,8 @@ export default function App() {
   useAgentPipeline({
     isSimulating, currentStep, personalContext, googleMapsLoaded, dynamicMarkers,
     livePosition, liveAddress,
+    focusPosition: focusPos, focusName: focusPlace?.name ?? null,
+    onOverrideToLive: (reason) => { setFocusPlace(null); setOverrideNotice(reason); },
     setAgents, setHazardSignal, setCurrentStep, setLiveSteps, setLiveSmsDraft,
     setLiveRoute, setLiveShelter, setLiveAddress, setIsSimulating, setShowSmsModal,
     setActiveHazard, setThreatScan, setShelterSource
@@ -203,16 +218,25 @@ export default function App() {
   // Get the drafted message text. Prefers live Gemini draft when available.
   const getDraftedSmsText = (): string => buildSmsDraft({ liveSmsDraft, personalContext, activeHazard, dynamicMarkers, livePosition });
 
-  // Search: geocode the typed place and fly the map there, then clear the text
-  // so the nearby-resources filter resets around the new location.
-  const handleSearchSubmit = async () => {
-    const q = searchQuery.trim();
-    if (!q) return;
-    const pos = await geocodePlace(q);
-    if (pos) {
-      panTo(pos);
-      setSearchQuery('');
-    }
+  // Picking a suggestion moves what the app is REASONING about, not just the
+  // camera. The old handler only flew the map; the scan and shelter lookup stayed
+  // pinned to GPS, so searching another city changed the view and nothing else.
+  const handleSelectSuggestion = async (s: PlaceSuggestion) => {
+    const resolved = await resolveSuggestion(s);
+    if (!resolved) return;
+    setFocusPlace(resolved);
+    setOverrideNotice(null);
+    setSearchQuery('');
+    panTo(resolved.pos);
+    handleStandDown();
+  };
+
+  const handleReturnToMe = () => {
+    setFocusPlace(null);
+    setOverrideNotice(null);
+    setSearchQuery('');
+    handleStandDown();
+    recenter();
   };
 
   const { isListening, heardText, sttFeedback, toggleSpeechRecognition } = useVoiceAssistant({
@@ -271,11 +295,35 @@ export default function App() {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 onClearSearch={() => setSearchQuery('')}
-                onSubmit={handleSearchSubmit}
-                location={personalContext.location}
+                onSelectSuggestion={handleSelectSuggestion}
+                near={focusPos}
+                placeholderLocation={personalContext.location}
                 user={user}
                 onSignOut={handleSignOut}
               />
+
+              {/* Loud, persistent reminder that routes are not from where you are */}
+              <FocusBanner placeName={focusPlace?.name ?? null} onReturnToMe={handleReturnToMe} />
+
+              {/* A real hazard at the user's own position outranks whatever they
+                  were browsing, so it says so instead of silently switching. */}
+              {overrideNotice && (
+                <div className="bg-red-600/20 border border-red-500/60 rounded-2xl px-3 py-2 flex items-start gap-2 shadow-xl backdrop-blur-md">
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5 animate-pulse" />
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-red-300 leading-none">
+                      Returned to your location
+                    </span>
+                    <span className="block text-[10px] text-red-100 font-mono leading-snug mt-1">{overrideNotice}</span>
+                  </div>
+                  <button
+                    onClick={() => setOverrideNotice(null)}
+                    className="shrink-0 text-red-300 hover:text-white transition p-0.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
 
               {/* HORIZONTAL CATEGORY SCROLLABLE CHIPS */}
               <CategoryChips
@@ -380,6 +428,7 @@ export default function App() {
                     liveRoute={liveRoute}
                     dynamicMarkers={dynamicMarkers}
                     shelterSource={shelterSource}
+                    focusName={focusPlace?.name ?? null}
                   />
 
                   {/* SAFETY GUARD DASHBOARD — All Family Secure */}

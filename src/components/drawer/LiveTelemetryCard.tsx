@@ -10,10 +10,12 @@ interface LiveTelemetryCardProps {
   liveRoute: WalkingRoute | null;
   dynamicMarkers: any[];
   shelterSource: 'official' | 'places' | null;
+  /** Non-null while examining a searched place rather than the user's own. */
+  focusName: string | null;
 }
 
 export function LiveTelemetryCard({
-  livePosition, liveAddress, liveShelter, liveRoute, dynamicMarkers, shelterSource
+  livePosition, liveAddress, liveShelter, liveRoute, dynamicMarkers, shelterSource, focusName
 }: LiveTelemetryCardProps) {
   // Straight-line distance to the nearest real shelter. Available as soon as GPS
   // and Places have landed, so the card is useful before any alert is triggered
@@ -28,16 +30,18 @@ export function LiveTelemetryCard({
         <Navigation className="w-4 h-4 text-emerald-400" />
         <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans">Live Telemetry</span>
         <span className="ml-auto text-[9px] font-mono uppercase text-slate-500">
-          {livePosition ? 'GPS LOCKED' : 'AWAITING GPS'}
+          {focusName ? 'VIEWING ELSEWHERE' : livePosition ? 'GPS LOCKED' : 'AWAITING GPS'}
         </span>
       </div>
       <div className="grid grid-cols-1 gap-1.5 text-[10.5px] font-mono">
         <div className="flex items-start gap-1.5">
           <MapPin className="w-3 h-3 text-indigo-400 mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">
-            <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">You are at</span>
+            <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">
+              {focusName ? 'Checking' : 'You are at'}
+            </span>
             <p className="text-slate-200 leading-snug break-words">
-              {liveAddress || (livePosition
+              {focusName || liveAddress || (livePosition
                 ? `${livePosition.lat.toFixed(5)}, ${livePosition.lng.toFixed(5)}`
                 : 'Acquiring device location…')}
             </p>

@@ -18,6 +18,8 @@ export interface UseGoogleMapsParams {
   currentStep: number;
   /** False for shelter-in-place hazards — no line should invite going outside. */
   routingEnabled: boolean;
+  /** Set when examining a searched place; drawn separately from the GPS dot. */
+  focusPosition: LatLng | null;
   user: unknown;
   livePosition: LatLng | null;
   liveRoute: WalkingRoute | null;
@@ -31,7 +33,7 @@ export interface UseGoogleMapsParams {
 // Loads the Google Maps script and manages the live map instance: markers
 // (POIs + user + family), route polyline, traffic/type layers, and centering.
 export function useGoogleMaps({
-  dynamicMarkers, mapLayer, currentStep, routingEnabled, user,
+  dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition, user,
   livePosition, liveRoute, liveShelter, googleMapsLoaded,
   setGoogleMapsLoaded, setMapCenter, setActiveMarker
 }: UseGoogleMapsParams) {
@@ -338,6 +340,27 @@ export function useGoogleMaps({
       googleMarkersRef.current.push(userMarker);
     }
 
+    // 4a. The place being examined, if it is not where the user is standing.
+    // A separate amber ring, never a second blue dot: the blue dot means "you",
+    // and moving or duplicating it would misrepresent where the device is.
+    if (focusPosition) {
+      const focusMarker = new google.maps.Marker({
+        position: focusPosition,
+        map: mapInstanceRef.current,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: '#f59e0b',
+          fillOpacity: 0.25,
+          strokeColor: '#f59e0b',
+          strokeWeight: 2.5
+        },
+        title: 'Place being checked (not your location)',
+        zIndex: 5
+      });
+      googleMarkersRef.current.push(focusMarker);
+    }
+
     // 4b. Family member position pins — small offsets from the user's live position.
     if (livePosition) {
       FAMILY_MEMBERS.forEach(member => {
@@ -383,14 +406,20 @@ export function useGoogleMaps({
 
     if (routingEnabled) {
       // Prefer the REAL Google Directions polyline; fall back to a straight line to the shelter.
+      //
+      // The origin is the place being ASSESSED, not the device. Using livePosition
+      // here drew the fallback line from the user's own address to a shelter beside
+      // the searched place, and fitBounds then framed both — which snapped the
+      // camera back home the moment an alert was triggered for somewhere else.
+      const routeOrigin = focusPosition ?? livePosition;
       let pathCoords: { lat: number; lng: number }[] | null = null;
       const hasStreetRoute = !!(liveRoute && liveRoute.path.length > 1);
       if (hasStreetRoute) {
         pathCoords = liveRoute!.path;
       } else {
         const shelterData = liveShelter || dynamicMarkers.find((m: any) => m.category === 'shelter');
-        if (shelterData && userPos) {
-          pathCoords = [userPos, { lat: shelterData.lat, lng: shelterData.lng }];
+        if (shelterData && routeOrigin) {
+          pathCoords = [routeOrigin, { lat: shelterData.lat, lng: shelterData.lng }];
         }
       }
 
@@ -439,7 +468,7 @@ export function useGoogleMaps({
       fittedRouteKeyRef.current = null;
     }
 
-  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, routingEnabled, user, livePosition, liveRoute, liveShelter, publishCenter, cancelAnimation, setActiveMarker]);
+  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition, user, livePosition, liveRoute, liveShelter, publishCenter, cancelAnimation, setActiveMarker]);
 
   // Recenter the map on the user's live GPS position (used by the recenter
   // button). An explicit flight — bypasses the one-shot gpsCenteredRef so it

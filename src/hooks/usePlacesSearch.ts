@@ -6,14 +6,13 @@ export interface UsePlacesSearchParams {
   googleMapsLoaded: boolean;
   mapCenter: { lat: number; lng: number } | null;
   filterCategory: string;
-  searchQuery: string;
   setDynamicMarkers: (markers: any[]) => void;
 }
 
 // Dynamic Places API (New) fetcher — uses google.maps.places.Place.searchNearby.
 // Requires "Places API (New)" enabled in Google Cloud Console.
 export function usePlacesSearch({
-  googleMapsLoaded, mapCenter, filterCategory, searchQuery, setDynamicMarkers
+  googleMapsLoaded, mapCenter, filterCategory, setDynamicMarkers
 }: UsePlacesSearchParams) {
   useEffect(() => {
     if (!googleMapsLoaded || !mapCenter || typeof google === 'undefined' || !google.maps?.places?.Place) return;
@@ -83,15 +82,11 @@ export function usePlacesSearch({
       const deduplicated = Array.from(uniqueMap.values());
       console.info('[Places-New] result', { categories: activeCategories.length, total: deduplicated.length });
 
-      const final = deduplicated.filter((m: any) => {
-        if (!searchQuery) return true;
-        return (
-          (m.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (m.desc || '').toLowerCase().includes(searchQuery.toLowerCase())
-        );
-      });
-      setDynamicMarkers(final);
+      // No text filtering here any more: the search box picks a place to examine
+      // rather than narrowing the pins, and having it do both meant typing and
+      // pressing Enter did contradictory things.
+      setDynamicMarkers(deduplicated);
     });
 
-  }, [googleMapsLoaded, mapCenter, filterCategory, searchQuery, setDynamicMarkers]);
+  }, [googleMapsLoaded, mapCenter, filterCategory, setDynamicMarkers]);
 }

@@ -470,11 +470,49 @@ export async function scanForHazards(pos: LatLng): Promise<HazardScan> {
   });
 
   return {
-    hazards: dedupeQuakes(hazards),
+    hazards: dedupeEvents(hazards),
     sourcesQueried,
     sourcesFailed,
     scannedAt: new Date().toISOString()
   };
+}
+
+/** Strip a cyclone name down to comparable letters: "NOUL-26" -> "NOUL". */
+const cycloneKey = (s: string): string =>
+  (s.match(/[A-Za-z]+/)?.[0] ?? '').toUpperCase();
+
+/**
+ * The same tropical cyclone arrives from both JMA and GDACS. JMA carries the
+ * forecast track and the published gale/storm radii; GDACS gives only a point,
+ * which the assessor has to screen with a coarse radius. Keeping both let the
+ * vaguer record win a tiebreak and report "500 km is a coarse screen" for a
+ * storm whose exact warning circles were already in hand — so fold them, always
+ * preferring the record that has a track.
+ */
+function dedupeCyclones(hazards: LiveHazard[]): LiveHazard[] {
+  const cyclones = hazards.filter((h) => h.hazard === 'typhoon');
+  const others = hazards.filter((h) => h.hazard !== 'typhoon');
+  const kept: LiveHazard[] = [];
+
+  // Records with a forecast track first, so they become the ones kept.
+  for (const c of [...cyclones].sort((a, b) => Number(!!b.typhoon) - Number(!!a.typhoon))) {
+    const key = cycloneKey(c.typhoon?.name ?? c.headline);
+    const dup = kept.find((k) => {
+      const kKey = cycloneKey(k.typhoon?.name ?? k.headline);
+      if (key && kKey && (key.startsWith(kKey) || kKey.startsWith(key))) return true;
+      // Unnamed or renamed: same storm if the centres are close.
+      if (!k.epicenter || !c.epicenter) return false;
+      return roughKm(k.epicenter, c.epicenter) < 500;
+    });
+    if (dup) {
+      dup.gdacsAlertLevel ??= c.gdacsAlertLevel;
+      dup.gdacsSeverity ??= c.gdacsSeverity;
+      if (!dup.bulletinEn && c.bulletinEn) dup.bulletinEn = c.bulletinEn;
+      continue;
+    }
+    kept.push({ ...c });
+  }
+  return [...kept, ...others];
 }
 
 /**
@@ -507,6 +545,11 @@ function dedupeQuakes(hazards: LiveHazard[]): LiveHazard[] {
     kept.push(q);
   }
   return [...kept, ...others];
+}
+
+/** Fold duplicate reports of the same event across sources. */
+function dedupeEvents(hazards: LiveHazard[]): LiveHazard[] {
+  return dedupeCyclones(dedupeQuakes(hazards));
 }
 
 const roughKm = (a: LatLng, b: LatLng): number => {

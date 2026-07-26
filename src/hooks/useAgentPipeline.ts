@@ -29,6 +29,9 @@ export interface UseAgentPipelineParams {
   googleMapsLoaded: boolean;
   dynamicMarkers: any[];
   livePosition: LatLng | null;
+  /** The place being examined. Equals livePosition unless the user searched one. */
+  focusPosition: LatLng | null;
+  focusName: string | null;
   liveAddress: string | null;
   setAgents: React.Dispatch<React.SetStateAction<AgentState[]>>;
   setHazardSignal: React.Dispatch<React.SetStateAction<HazardSignal | null>>;
@@ -43,6 +46,8 @@ export interface UseAgentPipelineParams {
   /** The hazard is discovered, not chosen — the scan writes it back. */
   setActiveHazard: React.Dispatch<React.SetStateAction<Hazard>>;
   setThreatScan: React.Dispatch<React.SetStateAction<ThreatScanState | null>>;
+  /** Called when a real hazard hits the user's ACTUAL position while browsing. */
+  onOverrideToLive: (reason: string) => void;
   /** Whether the chosen shelter came from the official register or a guess. */
   setShelterSource: React.Dispatch<React.SetStateAction<'official' | 'places' | null>>;
 }
@@ -72,10 +77,10 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
 
     const {
       currentStep, personalContext, googleMapsLoaded, dynamicMarkers,
-      livePosition, liveAddress,
+      livePosition, focusPosition, focusName, liveAddress,
       setAgents, setHazardSignal, setCurrentStep, setLiveSteps, setLiveSmsDraft,
       setLiveRoute, setLiveShelter, setLiveAddress, setIsSimulating, setShowSmsModal,
-      setActiveHazard, setThreatScan, setShelterSource
+      setActiveHazard, setThreatScan, setShelterSource, onOverrideToLive
     } = paramsRef.current;
 
     if (currentStep !== 0) return;
@@ -102,7 +107,12 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
       mobility: personalContext.mobility
     };
 
-    const originPos = livePosition;
+    // Everything downstream reasons about the focused place. When the user has
+    // searched somewhere, that is deliberately NOT their GPS position.
+    const startPos = focusPosition ?? livePosition;
+    const browsingElsewhere = !!(focusPosition && livePosition &&
+      (Math.abs(focusPosition.lat - livePosition.lat) > 1e-4 ||
+       Math.abs(focusPosition.lng - livePosition.lng) > 1e-4));
 
     // Wind and severe weather are survived indoors — routing someone outside is
     // the wrong instruction, so these hazards get their own step set.
@@ -126,7 +136,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         // point is that an evacuation is not triggered by a distant or past event.
         markRunning(0);
 
-        if (!originPos) {
+        if (!startPos) {
           setThreatScan({
             status: 'unavailable', scannedAt: new Date().toISOString(),
             sourcesQueried: [], sourcesFailed: [], verdict: null
@@ -137,18 +147,45 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
           return;
         }
 
-        const [scan] = await Promise.all([scanForHazards(originPos), wait(300)]);
+        // Feeds are queried around a position (USGS by radius, GDACS by distance),
+        // so browsing a distant city would not surface a quake at the user's own
+        // address. While browsing, scan both and let a real threat at the device's
+        // location win — looking elsewhere must not cost you your own warning.
+        const [scan, homeScan] = await Promise.all([
+          scanForHazards(startPos),
+          browsingElsewhere && livePosition ? scanForHazards(livePosition) : Promise.resolve(null),
+          wait(300)
+        ]);
         if (!stillCurrent()) return;
 
-        const verdict = evaluateThreats(scan.hazards, originPos);
+        // Reassignable: if a real hazard turns out to be at the user's own
+        // position, the rest of the run switches to it rather than stopping.
+        let originPos = startPos;
+        let verdict = evaluateThreats(scan.hazards, originPos);
+        let scanMeta = scan;
+
+        if (homeScan && livePosition) {
+          const homeVerdict = evaluateThreats(homeScan.hazards, livePosition);
+          if (homeVerdict.worst) {
+            // Don't just warn and stop — take over the run so the user gets a
+            // real assessment, shelter and route for where they actually are.
+            onOverrideToLive(
+              `${homeVerdict.worst.hazard.headline} affects your actual location — switched back from ${focusName ?? 'the place you were checking'}.`
+            );
+            originPos = livePosition;
+            verdict = homeVerdict;
+            scanMeta = homeScan;
+          }
+        }
+
         // Reaching no feed at all is "unknown", never "all clear".
-        const noFeedAnswered = scan.sourcesQueried.length === 0;
+        const noFeedAnswered = scanMeta.sourcesQueried.length === 0;
 
         setThreatScan({
           status: noFeedAnswered ? 'unavailable' : verdict.worst ? 'threat' : 'clear',
-          scannedAt: scan.scannedAt,
-          sourcesQueried: scan.sourcesQueried,
-          sourcesFailed: scan.sourcesFailed,
+          scannedAt: scanMeta.scannedAt,
+          sourcesQueried: scanMeta.sourcesQueried,
+          sourcesFailed: scanMeta.sourcesFailed,
           verdict
         });
 
@@ -157,7 +194,7 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
           const nearest = verdict.all[0];
           markCompleted(0, noFeedAnswered
             ? 'Could not reach any hazard feed, so threat status is unknown. Retry when you have a connection.'
-            : `Scanned ${scan.sourcesQueried.length} live feeds — ${scan.hazards.length} recent event(s), none reaching your location. ` +
+            : `Scanned ${scanMeta.sourcesQueried.length} live feeds — ${scanMeta.hazards.length} recent event(s), none reaching this location. ` +
               (nearest ? `Closest: ${nearest.impact.basis}` : ''));
           setIsSimulating(false);
           setCurrentStep(-1);
@@ -219,8 +256,8 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         // ── Step 1: Personal Context Agent (resolves real address) ──
         markRunning(1);
         let address: string | null = liveAddress;
-        if (!address && livePosition) {
-          address = await reverseGeocode(livePosition);
+        if (!address && originPos) {
+          address = await reverseGeocode(originPos);
           if (address) setLiveAddress(address);
         }
         let personalResult = address
