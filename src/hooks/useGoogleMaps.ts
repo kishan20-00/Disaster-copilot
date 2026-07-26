@@ -18,6 +18,8 @@ export interface UseGoogleMapsParams {
   currentStep: number;
   /** False for shelter-in-place hazards — no line should invite going outside. */
   routingEnabled: boolean;
+  /** Set when examining a searched place; drawn separately from the GPS dot. */
+  focusPosition: LatLng | null;
   user: unknown;
   livePosition: LatLng | null;
   liveRoute: WalkingRoute | null;
@@ -31,7 +33,7 @@ export interface UseGoogleMapsParams {
 // Loads the Google Maps script and manages the live map instance: markers
 // (POIs + user + family), route polyline, traffic/type layers, and centering.
 export function useGoogleMaps({
-  dynamicMarkers, mapLayer, currentStep, routingEnabled, user,
+  dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition, user,
   livePosition, liveRoute, liveShelter, googleMapsLoaded,
   setGoogleMapsLoaded, setMapCenter, setActiveMarker
 }: UseGoogleMapsParams) {
@@ -338,6 +340,27 @@ export function useGoogleMaps({
       googleMarkersRef.current.push(userMarker);
     }
 
+    // 4a. The place being examined, if it is not where the user is standing.
+    // A separate amber ring, never a second blue dot: the blue dot means "you",
+    // and moving or duplicating it would misrepresent where the device is.
+    if (focusPosition) {
+      const focusMarker = new google.maps.Marker({
+        position: focusPosition,
+        map: mapInstanceRef.current,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: '#f59e0b',
+          fillOpacity: 0.25,
+          strokeColor: '#f59e0b',
+          strokeWeight: 2.5
+        },
+        title: 'Place being checked (not your location)',
+        zIndex: 5
+      });
+      googleMarkersRef.current.push(focusMarker);
+    }
+
     // 4b. Family member position pins — small offsets from the user's live position.
     if (livePosition) {
       FAMILY_MEMBERS.forEach(member => {
@@ -439,7 +462,7 @@ export function useGoogleMaps({
       fittedRouteKeyRef.current = null;
     }
 
-  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, routingEnabled, user, livePosition, liveRoute, liveShelter, publishCenter, cancelAnimation, setActiveMarker]);
+  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition, user, livePosition, liveRoute, liveShelter, publishCenter, cancelAnimation, setActiveMarker]);
 
   // Recenter the map on the user's live GPS position (used by the recenter
   // button). An explicit flight — bypasses the one-shot gpsCenteredRef so it
