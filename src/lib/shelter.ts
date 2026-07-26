@@ -1,6 +1,9 @@
 import type { LatLng } from '@/services/geolocation';
 import type { Hazard } from '@/types/domain';
 import { findNearestShelter, formatDistance, haversineMeters } from '@/services/maps';
+import type { DesignatedShelter } from '@/services/shelters';
+import type { HazardInfo } from '@/constants/hazards';
+import { hazardInfo } from '@/constants/hazards';
 
 export interface ShelterInfo {
   name: string;
@@ -36,36 +39,38 @@ export function getShelterInfo(userPos: LatLng | null, dynamicMarkers: any[]): S
 // ─────────────────────────────────────────────────────────────────────────────
 // Hazard-aware shelter choice.
 //
-// "Nearest" is the wrong answer on its own — the safest place depends on what is
-// happening. Open ground is right for an earthquake (falling façades, glass) and
-// wrong for a typhoon (flying debris); a low-lying park is actively dangerous in
-// a tsunami. These weights encode that, and distance breaks the tie.
+// Shelters are not interchangeable. A site certified for shaking may sit inside
+// a tsunami inundation zone; a low-lying park is useless against a surge. So the
+// candidate set changes with the hazard, and only then does distance decide.
 //
-// Note: true high-ground selection needs elevation data. Google's Elevation API
-// would give it; until that is wired, the tsunami rule can only prefer sturdy
-// structures and push away from the wave's approach bearing.
+// Two tiers, in order of trust:
+//
+//   1. OFFICIAL — Japan's designated evacuation sites (指定緊急避難場所), already
+//      filtered by the municipality to those certified for this exact hazard.
+//      Nothing needs inferring: nearest certified site wins.
+//   2. FALLBACK — outside GSI coverage there is no register, so candidates come
+//      from Google Places and are scored by what kind of place they are. These
+//      are explicitly NOT official and must be labelled that way.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Google Places primary types, grouped by what they physically offer. */
+/** Places primary types grouped by what they physically offer. */
 const OPEN_GROUND = ['park', 'stadium', 'school', 'university', 'playground'];
-const STURDY_BUILDING = ['city_hall', 'hospital', 'library', 'university', 'shopping_mall', 'gym', 'train_station', 'subway_station'];
+const SOLID_BUILDING = ['city_hall', 'hospital', 'library', 'university', 'shopping_mall', 'gym', 'train_station', 'subway_station'];
+/** No elevation data client-side, so "high" can only mean "a tall solid structure". */
+const HIGH_GROUND = ['city_hall', 'hospital', 'university', 'shopping_mall', 'train_station'];
 
-const HAZARD_PREFERENCE: Record<Hazard, { prefer: string[]; avoid: string[]; rationale: string }> = {
-  earthquake: {
-    prefer: OPEN_GROUND,
-    avoid: ['shopping_mall'],
-    rationale: 'open ground, clear of façades and glass'
-  },
-  typhoon: {
-    prefer: STURDY_BUILDING,
-    avoid: ['park', 'playground', 'stadium'],
-    rationale: 'a sturdy enclosed building, away from wind-borne debris'
-  },
-  tsunami: {
-    prefer: STURDY_BUILDING,
-    avoid: ['park', 'playground', 'beach'],
-    rationale: 'a tall, solid structure for vertical evacuation'
-  }
+const TERRAIN_TYPES: Record<HazardInfo['fallbackTerrain'], string[]> = {
+  open_ground: OPEN_GROUND,
+  solid_building: SOLID_BUILDING,
+  high_ground: HIGH_GROUND,
+  none: []
+};
+
+const TERRAIN_AVOID: Record<HazardInfo['fallbackTerrain'], string[]> = {
+  open_ground: ['shopping_mall'],
+  solid_building: ['park', 'playground', 'stadium'],
+  high_ground: ['park', 'playground', 'stadium'],
+  none: []
 };
 
 export interface SafestShelter {
@@ -76,26 +81,73 @@ export interface SafestShelter {
   distanceMeters: number;
   distance: string;
   desc: string;
-  /** Why this one was chosen over a closer option, for the UI to show. */
+  /** Why this one, in plain language, for the UI to show. */
   rationale: string;
+  /** True only when drawn from the official designated-site register. */
+  official: boolean;
+  address?: string;
+  /** GSI disasterN numbers this site is certified for. */
+  certifiedFor?: number[];
+  source: string;
 }
 
+const GSI_HAZARD_NAMES: Record<number, string> = {
+  1: 'flood', 2: 'landslide', 3: 'storm surge', 4: 'earthquake',
+  5: 'tsunami', 6: 'large fire', 7: 'inland flooding', 8: 'volcanic activity'
+};
+
 /**
- * Rank candidate shelters for a specific hazard. `threatFrom` is the hazard's
- * origin (quake epicentre / tsunami source) — when supplied, shelters lying in
- * that direction are penalised so a tsunami never routes someone toward the water.
+ * Pick where to send someone for a specific hazard.
+ *
+ * `official` are pre-filtered designated sites (may be empty outside Japan);
+ * `placesMarkers` is the Google Places fallback. `threatFrom` is the hazard's
+ * origin, used so a water hazard never routes anyone toward the source.
  */
 export function pickSafestShelter(
   hazard: Hazard,
   userPos: LatLng | null,
-  markers: any[],
+  placesMarkers: any[],
+  official: DesignatedShelter[] = [],
   threatFrom?: LatLng | null
 ): SafestShelter | null {
-  if (!userPos || !markers?.length) return null;
-  const candidates = markers.filter((m) => m?.category === 'shelter' && Number.isFinite(m.lat) && Number.isFinite(m.lng));
+  if (!userPos) return null;
+  const info = hazardInfo(hazard);
+
+  // ── Tier 1: the official register ──
+  if (official.length) {
+    const ranked = official
+      .map((s) => ({ s, d: haversineMeters(userPos, { lat: s.lat, lng: s.lng }) }))
+      .sort((a, b) => a.d - b.d);
+    const best = ranked[0];
+    const certified = best.s.certifiedFor.map((n) => GSI_HAZARD_NAMES[n]).filter(Boolean);
+    return {
+      id: best.s.id,
+      name: best.s.name,
+      lat: best.s.lat,
+      lng: best.s.lng,
+      distanceMeters: best.d,
+      distance: formatDistance(best.d),
+      desc: [best.s.address, best.s.remarks].filter(Boolean).join(' · '),
+      official: true,
+      address: best.s.address,
+      certifiedFor: best.s.certifiedFor,
+      source: best.s.source,
+      rationale:
+        `Officially designated for ${info.label.toLowerCase()}` +
+        (certified.length > 1 ? ` (also certified for ${certified.filter((c) => c !== info.label.toLowerCase()).join(', ')})` : '') +
+        `. ${ranked.length} certified site(s) nearby; this is the closest.`
+    };
+  }
+
+  // ── Tier 2: Google Places, scored by what the place physically is ──
+  const candidates = placesMarkers.filter(
+    (m) => m?.category === 'shelter' && Number.isFinite(m.lat) && Number.isFinite(m.lng)
+  );
   if (!candidates.length) return null;
 
-  const { prefer, avoid, rationale } = HAZARD_PREFERENCE[hazard];
+  const prefer = TERRAIN_TYPES[info.fallbackTerrain];
+  const avoid = TERRAIN_AVOID[info.fallbackTerrain];
+  const wantsAwayFromSource = info.fallbackTerrain === 'high_ground';
 
   const scored = candidates.map((m) => {
     const distanceMeters = haversineMeters(userPos, { lat: m.lat, lng: m.lng });
@@ -109,8 +161,8 @@ export function pickSafestShelter(
     // one preference grade is worth roughly 600 m of walking.
     score -= distanceMeters / 600;
 
-    // For wave hazards, moving toward the source is the wrong direction.
-    if (threatFrom && (hazard === 'tsunami')) {
+    // For water hazards, moving toward the source is the wrong direction.
+    if (threatFrom && wantsAwayFromSource) {
       const userToThreat = haversineMeters(userPos, threatFrom);
       const shelterToThreat = haversineMeters({ lat: m.lat, lng: m.lng }, threatFrom);
       score += shelterToThreat > userToThreat ? 1.5 : -1.5;
@@ -122,7 +174,6 @@ export function pickSafestShelter(
   const best = scored[0];
   const closest = scored.reduce((a, b) => (b.distanceMeters < a.distanceMeters ? b : a));
   const tradedUp = best.m.id !== closest.m.id;
-  const hazardPhrase = hazard === 'earthquake' ? 'an earthquake' : `a ${hazard}`;
 
   return {
     id: best.m.id,
@@ -132,8 +183,11 @@ export function pickSafestShelter(
     distanceMeters: best.distanceMeters,
     distance: formatDistance(best.distanceMeters),
     desc: best.m.desc || '',
-    rationale: tradedUp
-      ? `Chosen over the closer ${closest.m.name} because ${hazardPhrase} calls for ${rationale}.`
-      : `Nearest suitable option for ${hazardPhrase}: ${rationale}.`
+    official: false,
+    source: 'Google Places (no official shelter register available here)',
+    rationale:
+      `No official shelter register covers this area, so this is a best guess from nearby places — ` +
+      `not a designated shelter. Chosen because ${info.label.toLowerCase()} calls for ${info.rationale.toLowerCase()}` +
+      (tradedUp ? ` It was preferred over the closer ${closest.m.name}.` : '')
   };
 }

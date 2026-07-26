@@ -46,11 +46,14 @@ export function usePlacesSearch({
           const lat = typeof loc?.lat === 'function' ? loc.lat() : loc?.lat;
           const lng = typeof loc?.lng === 'function' ? loc.lng() : loc?.lng;
           const name = typeof p.displayName === 'string' ? p.displayName : (p.displayName?.text ?? 'Unknown');
+          // These are ordinary Google Places results, not certified facilities.
+          // Official designated shelters come from services/shelters.ts; claiming
+          // that status for any nearby park or shop would be a lie.
           const descSuffix =
-            cat === 'shelter' ? 'Designated shelter point.' :
-            cat === 'water' ? 'Emergency water / supply node.' :
-            cat === 'medical' ? 'Emergency medical / triage point.' :
-            'Active evacuation transit point.';
+            cat === 'shelter' ? 'Open/public space — not a designated shelter.' :
+            cat === 'water' ? 'Shop that may stock water and supplies.' :
+            cat === 'medical' ? 'Medical facility.' :
+            'Public transit point.';
           return {
             id: p.id,
             category: cat,

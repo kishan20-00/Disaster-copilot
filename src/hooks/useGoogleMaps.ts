@@ -16,6 +16,8 @@ export interface UseGoogleMapsParams {
   dynamicMarkers: any[];
   mapLayer: string;
   currentStep: number;
+  /** False for shelter-in-place hazards — no line should invite going outside. */
+  routingEnabled: boolean;
   user: unknown;
   livePosition: LatLng | null;
   liveRoute: WalkingRoute | null;
@@ -29,7 +31,7 @@ export interface UseGoogleMapsParams {
 // Loads the Google Maps script and manages the live map instance: markers
 // (POIs + user + family), route polyline, traffic/type layers, and centering.
 export function useGoogleMaps({
-  dynamicMarkers, mapLayer, currentStep, user,
+  dynamicMarkers, mapLayer, currentStep, routingEnabled, user,
   livePosition, liveRoute, liveShelter, googleMapsLoaded,
   setGoogleMapsLoaded, setMapCenter, setActiveMarker
 }: UseGoogleMapsParams) {
@@ -379,7 +381,7 @@ export function useGoogleMaps({
       routePolylineRef.current = null;
     }
 
-    if (currentStep >= 0) {
+    if (routingEnabled) {
       // Prefer the REAL Google Directions polyline; fall back to a straight line to the shelter.
       let pathCoords: { lat: number; lng: number }[] | null = null;
       const hasStreetRoute = !!(liveRoute && liveRoute.path.length > 1);
@@ -437,7 +439,7 @@ export function useGoogleMaps({
       fittedRouteKeyRef.current = null;
     }
 
-  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, user, livePosition, liveRoute, liveShelter, publishCenter, cancelAnimation, setActiveMarker]);
+  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, routingEnabled, user, livePosition, liveRoute, liveShelter, publishCenter, cancelAnimation, setActiveMarker]);
 
   // Recenter the map on the user's live GPS position (used by the recenter
   // button). An explicit flight — bypasses the one-shot gpsCenteredRef so it

@@ -52,6 +52,9 @@ export interface LiveHazard {
   feltReports?: number;
   tsunamiFlag?: boolean;
   tsunamiKind?: { codes: string[]; text: string };
+  /** GDACS PAGER-style alert level: Green | Orange | Red. */
+  gdacsAlertLevel?: string;
+  gdacsSeverity?: string;
   typhoon?: {
     name: string;
     nameJa?: string;
@@ -62,6 +65,7 @@ export interface LiveHazard {
   };
 }
 
+const GDACS_EVENTS = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH';
 const JMA_QUAKE = 'https://www.jma.go.jp/bosai/quake/data/list.json';
 const JMA_TSUNAMI = 'https://www.jma.go.jp/bosai/tsunami/data/list.json';
 const JMA_TYPHOON_TARGETS = 'https://www.jma.go.jp/bosai/typhoon/data/targetTc.json';
@@ -335,6 +339,95 @@ async function fetchJmaTyphoons(): Promise<LiveHazard[]> {
   return results.filter((r): r is LiveHazard => r !== null);
 }
 
+// ── GDACS (global, multi-hazard) ─────────────────────────────────────────────
+
+/**
+ * GDACS event types → our hazard classes. This is the source that takes the app
+ * beyond earthquakes and storms: floods, wildfires, volcanoes and drought,
+ * anywhere in the world.
+ */
+const GDACS_TYPE_MAP: Record<string, Hazard> = {
+  EQ: 'earthquake',
+  TC: 'typhoon',
+  FL: 'flood',
+  VO: 'volcano',
+  WF: 'wildfire',
+  DR: 'drought',
+  TS: 'tsunami'
+};
+
+/** Beyond this an event has ended and is archive material, not an alert. */
+const GDACS_MAX_AGE_HOURS = 72;
+
+interface GdacsFeature {
+  properties?: {
+    eventid?: number | string; eventtype?: string; eventname?: string;
+    alertlevel?: string; episodealertlevel?: string; country?: string;
+    fromdate?: string; todate?: string; htmldescription?: string;
+    severitydata?: { severity?: number; severitytext?: string; severityunit?: string };
+  };
+  geometry?: { coordinates?: [number, number] };
+}
+
+/** Nothing beyond this can reach the user — the widest coarse reach is 1500 km. */
+const GDACS_MAX_DISTANCE_KM = 3000;
+
+async function fetchGdacsEvents(pos: LatLng): Promise<LiveHazard[]> {
+  const data = await getJson<{ features?: GdacsFeature[] }>(
+    `${GDACS_EVENTS}?alertlevel=Green;Orange;Red`
+  );
+  if (!data?.features?.length) return [];
+
+  const oldest = Date.now() - GDACS_MAX_AGE_HOURS * 3600_000;
+
+  return data.features.flatMap((f) => {
+    const p = f.properties ?? {};
+    const hazard = GDACS_TYPE_MAP[String(p.eventtype ?? '').toUpperCase()];
+    if (!hazard) return [];
+
+    const coords = f.geometry?.coordinates;
+    if (!coords || !Number.isFinite(coords[0]) || !Number.isFinite(coords[1])) return [];
+
+    // `todate` is when the reported episode ended. GDACS keeps events listed for
+    // a year or more — the same feed still carries typhoons from 2025 and a
+    // volcanic episode that closed in mid-July — so this window is what separates
+    // "happening now" from an archive entry.
+    const stamp = Date.parse(`${p.todate ?? p.fromdate ?? ''}Z`);
+    const when = Number.isFinite(stamp) ? stamp : NaN;
+    if (Number.isFinite(when) && when < oldest) return [];
+
+    // Global feed: a wildfire in Canada is real but cannot affect Yokohama, and
+    // keeping ~100 of them would drown the scan summary.
+    if (roughKm(pos, { lat: coords[1], lng: coords[0] }) > GDACS_MAX_DISTANCE_KM) return [];
+
+    const severity = p.severitydata?.severitytext || '';
+    const name = p.eventname || `${p.eventtype} ${p.eventid ?? ''}`.trim();
+    const alert = p.alertlevel || p.episodealertlevel || 'Green';
+
+    return [{
+      id: `gdacs-${p.eventtype}-${p.eventid ?? name}`,
+      hazard,
+      source: `GDACS ${alert.toLowerCase()} alert`,
+      headline: `${alert} ${hazardLabelFor(hazard)}${name ? ` ${name}` : ''}${p.country ? ` — ${p.country}` : ''}`,
+      bulletinEn: [p.htmldescription, severity].filter(Boolean).join(' ').trim() || undefined,
+      occurredAt: new Date(Number.isFinite(when) ? when : Date.now()).toISOString(),
+      epicenter: { lat: coords[1], lng: coords[0] },
+      gdacsAlertLevel: alert,
+      gdacsSeverity: severity || undefined
+    }];
+  });
+}
+
+// Kept local to avoid importing the constants table into the service layer.
+const hazardLabelFor = (h: Hazard): string =>
+  h === 'typhoon' ? 'tropical cyclone'
+    : h === 'wildfire' ? 'wildfire'
+    : h === 'volcano' ? 'volcanic activity'
+    : h === 'flood' ? 'flood'
+    : h === 'drought' ? 'drought'
+    : h === 'tsunami' ? 'tsunami'
+    : 'earthquake';
+
 // ── Public entry point ───────────────────────────────────────────────────────
 
 export interface HazardScan {
@@ -355,7 +448,8 @@ export async function scanForHazards(pos: LatLng): Promise<HazardScan> {
     { name: 'JMA earthquakes', run: fetchJmaQuakes },
     { name: 'USGS earthquakes', run: () => fetchUsgsQuakes(pos) },
     { name: 'JMA tsunami', run: fetchJmaTsunami },
-    { name: 'JMA typhoons', run: fetchJmaTyphoons }
+    { name: 'JMA typhoons', run: fetchJmaTyphoons },
+    { name: 'GDACS global multi-hazard', run: () => fetchGdacsEvents(pos) }
   ];
 
   const settled = await Promise.allSettled(jobs.map((j) => j.run()));

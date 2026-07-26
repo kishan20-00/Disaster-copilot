@@ -1,7 +1,28 @@
 // Shared domain types — single source of truth for the app + services.
 
 export type Language = 'English' | 'Chinese' | 'Vietnamese' | 'Japanese';
-export type Hazard = 'earthquake' | 'typhoon' | 'tsunami';
+
+// Hazard classes the app can detect and act on. The list is deliberately aligned
+// with Japan's official evacuation-site categories (GSI skhb01–08), so every
+// hazard that says "evacuate" has a corresponding set of designated shelters.
+// See src/constants/hazards.ts for the per-hazard behaviour.
+export type Hazard =
+  | 'earthquake'
+  | 'tsunami'
+  | 'typhoon'
+  | 'flood'
+  | 'inland_flood'
+  | 'storm_surge'
+  | 'landslide'
+  | 'volcano'
+  | 'wildfire'
+  | 'severe_weather'
+  | 'drought'
+  | 'other';
+
+// What the user should actually do about a hazard. Not every disaster means
+// "run to a shelter" — walking into a typhoon is worse than staying put.
+export type ResponseMode = 'evacuate' | 'shelter_in_place' | 'monitor';
 
 // Loose profile shape consumed by the Gemini service prompts.
 export interface PersonalProfile {

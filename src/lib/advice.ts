@@ -1,6 +1,7 @@
 import type { ActionStep, Hazard, PersonalContext } from '@/types/domain';
 import type { LatLng } from '@/services/geolocation';
 import { getShelterInfo } from '@/lib/shelter';
+import { hazardInfo } from '@/constants/hazards';
 
 export interface AdviceInput {
   liveSteps: ActionStep[] | null;
@@ -82,8 +83,7 @@ export function buildAdvice({ liveSteps, personalContext, activeHazard, dynamicM
         desc: language === 'English' ? "Checking high-ground evacuation path if sea surges occur." : language === 'Chinese' ? "如发生风暴潮，系统将规划高地避难路径。" : language === 'Vietnamese' ? "Sẵn sàng lộ trình sơ tán lên vùng cao nếu có triều cường dâng." : "高潮発生に備え、高台への避難経路を準備しています。"
       }
     ];
-  } else {
-    // Tsunami
+  } else if (activeHazard === 'tsunami') {
     return [
       {
         num: "1",
@@ -104,4 +104,34 @@ export function buildAdvice({ liveSteps, personalContext, activeHazard, dynamicM
       }
     ];
   }
+
+  // Newer hazard classes (flood, landslide, volcano, wildfire, …) have no
+  // hand-written multilingual copy. Gemini localises the live path; this
+  // deterministic fallback is English only, and says what it is rather than
+  // reusing tsunami advice — which is what the old three-way branch did.
+  const info = hazardInfo(activeHazard);
+  const shelter = getShelterInfo(userPos, dynamicMarkers);
+
+  if (info.response === 'shelter_in_place') {
+    return [
+      { num: '1', title: 'Stay inside — do not evacuate', desc: info.rationale },
+      { num: '2', title: 'Move away from windows and glass', desc: 'Use an inner room or hallway with no exterior glazing.' },
+      { num: '3', title: 'Keep alerts on', desc: 'You will be told if conditions make moving necessary.' }
+    ];
+  }
+
+  if (info.response === 'monitor') {
+    return [
+      { num: '1', title: `${info.label} reported nearby`, desc: info.rationale },
+      { num: '2', title: 'No evacuation required', desc: 'This is a slow-onset hazard. Follow local authority guidance.' },
+      { num: '3', title: 'Stay informed', desc: 'Keep alerts enabled in case the situation escalates.' }
+    ];
+  }
+
+  return [
+    { num: '1', title: `${info.label} — act now`, desc: info.rationale },
+    { num: '2', title: mobility === 'Wheelchair User' ? 'Use step-free exits' : 'Take stairs, not the elevator',
+      desc: companions === 'Traveling Solo' ? 'Move without delay.' : 'Keep your group together and move at the slowest person\u2019s pace.' },
+    { num: '3', title: `Move to ${shelter.name} (${shelter.distance})`, desc: 'Follow the highlighted route on the map.' }
+  ];
 }

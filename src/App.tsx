@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import type { ActionStep, HazardSignal, AgentState, PersonalContext } from '@/types/domain';
+import type { ActionStep, HazardSignal, AgentState, PersonalContext, Hazard } from '@/types/domain';
 import { LANGUAGES_MAP } from '@/constants/languages';
 import { INITIAL_AGENTS } from '@/constants/agents';
 import { getShelterInfo } from '@/lib/shelter';
+import { responseMode } from '@/constants/hazards';
 import { buildAdvice } from '@/lib/advice';
 import { buildSmsDraft } from '@/lib/sms';
 import { useARCamera } from '@/hooks/useARCamera';
@@ -45,8 +46,10 @@ import {
 export default function App() {
   // The hazard is discovered by the live scan, never picked by hand. It starts
   // as earthquake purely so the type is populated before the first scan.
-  const [activeHazard, setActiveHazard] = useState<'earthquake' | 'typhoon' | 'tsunami'>('earthquake');
+  const [activeHazard, setActiveHazard] = useState<Hazard>('earthquake');
   const [threatScan, setThreatScan] = useState<ThreatScanState | null>(null);
+  // Whether the shelter shown is an officially designated site or a Places guess.
+  const [shelterSource, setShelterSource] = useState<'official' | 'places' | null>(null);
   const [personalContext, setPersonalContext] = useState<PersonalContext>({
     language: 'English',
     location: '',
@@ -104,8 +107,11 @@ export default function App() {
   };
 
   // Google Maps instance + markers/route/layers (owns all map refs); returns the map container ref.
+  // Only draw an evacuation line when leaving is actually the advice.
+  const routingEnabled = currentStep >= 0 && responseMode(activeHazard) === 'evacuate';
+
   const { mapRef, recenter, panTo } = useGoogleMaps({
-    dynamicMarkers, mapLayer, currentStep,
+    dynamicMarkers, mapLayer, currentStep, routingEnabled,
     user, livePosition, liveRoute, liveShelter, googleMapsLoaded,
     setGoogleMapsLoaded, setMapCenter, setActiveMarker
   });
@@ -125,7 +131,7 @@ export default function App() {
     livePosition, liveAddress,
     setAgents, setHazardSignal, setCurrentStep, setLiveSteps, setLiveSmsDraft,
     setLiveRoute, setLiveShelter, setLiveAddress, setIsSimulating, setShowSmsModal,
-    setActiveHazard, setThreatScan
+    setActiveHazard, setThreatScan, setShelterSource
   });
 
   // Translate labels dynamically based on selected language
@@ -176,6 +182,7 @@ export default function App() {
     setSmsStatus('idle');
     setShowSmsModal(false);
     setThreatScan(null);
+    setShelterSource(null);
     setIsSimulating(false);
     setCurrentStep(-1);
   };
@@ -372,6 +379,7 @@ export default function App() {
                     liveShelter={liveShelter}
                     liveRoute={liveRoute}
                     dynamicMarkers={dynamicMarkers}
+                    shelterSource={shelterSource}
                   />
 
                   {/* SAFETY GUARD DASHBOARD — All Family Secure */}
