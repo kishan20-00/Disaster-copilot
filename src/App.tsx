@@ -19,7 +19,6 @@ import { SplashScreen } from '@/components/shell/SplashScreen';
 import { hasSeenSplash } from '@/lib/splash';
 import { SmsGateModal } from '@/components/sms/SmsGateModal';
 import { AROverlay } from '@/components/map/AROverlay';
-import { AuthScreen } from '@/components/auth/AuthScreen';
 import { EnableLocationState } from '@/components/map/EnableLocationState';
 import { MapSearchBar } from '@/components/map/MapSearchBar';
 import { FocusBanner } from '@/components/map/FocusBanner';
@@ -117,10 +116,12 @@ export default function App() {
   // Real Google Maps API integration state (map instance/overlay refs live in useGoogleMaps)
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
 
-  // Auth/session (Google OAuth) and geolocation are managed by hooks.
-  const { user, authLoading, signOut } = useAuth();
+  // Auth/session (Google OAuth) and geolocation are managed by hooks. Sign-in
+  // is optional — Emergency Mode runs on GPS alone; only Family sync asks for
+  // it — so location is requested from launch, not gated on `user`.
+  const { user, authLoading, signOut, renderSignInButton } = useAuth();
   const { requestLocation, location } = useGeolocation({
-    enabled: !!user,
+    enabled: true,
     googleMapsLoaded, livePosition,
     setLivePosition, setLiveAddress, setPersonalContext
   });
@@ -295,12 +296,7 @@ export default function App() {
             Maps and the hazard feeds all initialise behind it. */}
         {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
 
-        {!user ? (
-          /* ==========================================
-             PREMIUM AUTHENTICATION & LOGIN GUARD
-             ========================================== */
-          <AuthScreen authLoading={authLoading} />
-        ) : !(googleMapsLoaded && livePosition) ? (
+        {!(googleMapsLoaded && livePosition) ? (
           /* ==========================================
              LOCATION GATE — the app is fully driven by the user's real GPS
              ========================================== */
@@ -528,6 +524,8 @@ export default function App() {
             <ProfileSheet
               show={showProfile}
               user={user}
+              authLoading={authLoading}
+              renderSignInButton={renderSignInButton}
               sessionExpiry={sessionExpiry()}
               personalContext={personalContext}
               onChangeContext={updateContext}
