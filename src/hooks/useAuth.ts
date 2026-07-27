@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { parseJwt } from '@/lib/jwt';
 import { loadSession, saveSession, clearSession } from '@/lib/session';
 import type { AuthUser } from '@/types/domain';
@@ -41,50 +41,54 @@ export function useAuth() {
     }
   };
 
-  // Set up Google Identity Services SDK Button on mount/state change.
+  // Renders the GSI button into whatever DOM node currently has
+  // id="google-signin-button". Exposed (not just an effect) because that node
+  // no longer exists for the whole app lifetime — it now lives inside the
+  // Family sheet, which mounts/unmounts as the user opens and closes it. Every
+  // caller re-attempts the render, so it works whether the button appeared
+  // before or after the Google script finished loading.
+  const renderSignInButton = useCallback(() => {
+    if (typeof google === 'undefined' || !google.accounts?.id) return;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId || clientId.includes("your-google-client-id")) {
+      console.warn("VITE_GOOGLE_CLIENT_ID is not configured yet. Please configure it in .env file.");
+    }
+    google.accounts.id.initialize({
+      client_id: clientId || 'dummy-client-id.apps.googleusercontent.com',
+      callback: handleCredentialResponse,
+      auto_select: false,
+      cancel_on_tap_outside: true
+    });
+
+    const btnParent = document.getElementById("google-signin-button");
+    if (btnParent) {
+      google.accounts.id.renderButton(
+        btnParent,
+        {
+          theme: "filled_blue",
+          size: "large",
+          text: "signin_with",
+          shape: "pill",
+          width: btnParent.clientWidth || 320
+        }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep retrying while the Google script itself is still loading, in case the
+  // button happens to already be mounted (e.g. a page refresh while the sheet
+  // was open).
   useEffect(() => {
-    const initializeGoogleGSI = () => {
-      if (typeof google !== 'undefined' && google.accounts?.id) {
-        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-        if (!clientId || clientId.includes("your-google-client-id")) {
-          console.warn("VITE_GOOGLE_CLIENT_ID is not configured yet. Please configure it in .env file.");
-        }
-        google.accounts.id.initialize({
-          client_id: clientId || 'dummy-client-id.apps.googleusercontent.com',
-          callback: handleCredentialResponse,
-          auto_select: false,
-          cancel_on_tap_outside: true
-        });
-
-        const btnParent = document.getElementById("google-signin-button");
-        if (btnParent) {
-          google.accounts.id.renderButton(
-            btnParent,
-            {
-              theme: "filled_blue",
-              size: "large",
-              text: "signin_with",
-              shape: "pill",
-              width: btnParent.clientWidth || 320
-            }
-          );
-        }
-      }
-    };
-
-    // Try immediately
-    initializeGoogleGSI();
-
-    // Poll to check if the async defer script is loaded
+    renderSignInButton();
     const interval = setInterval(() => {
       if (typeof google !== 'undefined' && google.accounts?.id) {
-        initializeGoogleGSI();
+        renderSignInButton();
         clearInterval(interval);
       }
     }, 200);
-
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, renderSignInButton]);
 
   // Auto sign-out when the persisted Google token reaches its expiry while the
   // app is open.
@@ -110,5 +114,5 @@ export function useAuth() {
     }
   };
 
-  return { user, authLoading, signOut };
+  return { user, authLoading, signOut, renderSignInButton };
 }
