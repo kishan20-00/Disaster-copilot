@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   X, LogOut, User, Building2, Users, Accessibility, Languages,
-  Plus, Trash2, MapPin, ShieldQuestion
+  Plus, Trash2, MapPin, ShieldQuestion, Shield
 } from 'lucide-react';
 import type { AuthUser, PersonalContext, Language, Companions } from '@/types/domain';
 import { floorLabel, describeFloor, companionsLabel, TSUNAMI_MIN_SAFE_FLOOR } from '@/lib/profileFormat';
@@ -15,7 +15,9 @@ import {
 
 interface ProfileSheetProps {
   show: boolean;
-  user: AuthUser;
+  user: AuthUser | null;
+  authLoading: 'none' | 'google';
+  renderSignInButton: () => void;
   sessionExpiry: number | null;
   personalContext: PersonalContext;
   onChangeContext: (patch: Partial<PersonalContext>) => void;
@@ -78,7 +80,7 @@ function Choice<T extends string>({
 // way to change them was to say them out loud to the voice assistant — which is
 // why the SMS said "with child" whether or not anyone had one.
 export function ProfileSheet({
-  show, user, sessionExpiry, personalContext, onChangeContext,
+  show, user, authLoading, renderSignInButton, sessionExpiry, personalContext, onChangeContext,
   family, onChangeFamily, near, onClose, onSignOut
 }: ProfileSheetProps) {
   const [adding, setAdding] = useState(false);
@@ -88,6 +90,13 @@ export function ProfileSheet({
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [picked, setPicked] = useState<{ name: string; address?: string; pos: LatLng } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // The GSI button div only exists in the DOM while this sheet is open, so the
+  // button has to be (re)rendered on open rather than relying on useAuth's own
+  // mount-time effect, which ran before this node ever existed.
+  useEffect(() => {
+    if (show && !user) renderSignInButton();
+  }, [show, user, renderSignInButton]);
 
   if (!show) return null;
 
@@ -139,7 +148,7 @@ export function ProfileSheet({
           </div>
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              {user.avatar ? (
+              {user?.avatar ? (
                 <img src={user.avatar} alt="" className="w-11 h-11 rounded-full border border-slate-700 shrink-0" />
               ) : (
                 <div className="w-11 h-11 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
@@ -147,9 +156,11 @@ export function ProfileSheet({
                 </div>
               )}
               <div className="min-w-0">
-                <h3 className="text-sm font-black text-white truncate">{user.name}</h3>
-                <p className="text-[10px] font-mono text-slate-400 truncate">{user.email}</p>
-                <p className="text-[9px] font-mono text-slate-600 mt-0.5">Google session · {expiryText}</p>
+                <h3 className="text-sm font-black text-white truncate">{user?.name ?? 'Guest'}</h3>
+                <p className="text-[10px] font-mono text-slate-400 truncate">
+                  {user ? user.email : 'Emergency Mode — not signed in'}
+                </p>
+                {user && <p className="text-[9px] font-mono text-slate-600 mt-0.5">Google session · {expiryText}</p>}
               </div>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition shrink-0">
@@ -267,7 +278,7 @@ export function ProfileSheet({
                   Where you expect people to be. Checked against the hazard when an alert runs.
                 </p>
               </div>
-              {!adding && (
+              {user && !adding && (
                 <button onClick={() => setAdding(true)}
                   className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[9.5px] font-black uppercase tracking-wide transition active:scale-95">
                   <Plus className="w-3 h-3" /> Add
@@ -275,6 +286,24 @@ export function ProfileSheet({
               )}
             </div>
 
+            {/* Stored per Google account (see familyStore.ts), so there is
+                nowhere to save a family place until the user signs in. */}
+            {!user ? (
+              <div className="bg-slate-950 border border-indigo-500/30 rounded-xl p-3.5 flex flex-col items-center text-center gap-2.5">
+                <Shield className="w-6 h-6 text-indigo-400" />
+                <p className="text-[10px] font-mono text-slate-400 leading-snug">
+                  Sign in with Google to save family places and sync them across your devices.
+                </p>
+                <div id="google-signin-button" className="w-full flex justify-center h-11" />
+                {authLoading === 'google' && (
+                  <div className="text-[9.5px] text-indigo-400 font-mono flex items-center gap-1.5 animate-pulse">
+                    <span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                    Securely connecting to Google Identity Services...
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
             {/* Honest about what this is and is not */}
             <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-2">
               <ShieldQuestion className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
@@ -358,16 +387,20 @@ export function ProfileSheet({
                 </div>
               </div>
             )}
+              </>
+            )}
 
           </section>
 
-          <button
-            onClick={onSignOut}
-            className="w-full py-2.5 bg-red-600/15 hover:bg-red-600/25 border border-red-500/40 text-red-300 hover:text-red-200 rounded-xl text-[11px] font-black uppercase tracking-wide transition active:scale-95 flex items-center justify-center gap-1.5"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Sign out
-          </button>
+          {user && (
+            <button
+              onClick={onSignOut}
+              className="w-full py-2.5 bg-red-600/15 hover:bg-red-600/25 border border-red-500/40 text-red-300 hover:text-red-200 rounded-xl text-[11px] font-black uppercase tracking-wide transition active:scale-95 flex items-center justify-center gap-1.5"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sign out
+            </button>
+          )}
         </div>
       </div>
     </div>
