@@ -27,12 +27,21 @@ export function BottomNavBar({ activeTab, alertsOpen, onSelectHome, onSelectNavi
         <button
           key={id}
           onClick={onClick}
-          className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition active:scale-95 ${
-            active ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
-          }`}
+          className="flex-1 flex flex-col items-center justify-center transition active:scale-95"
         >
-          <Icon className="w-5 h-5" style={active ? { fill: 'currentColor', fillOpacity: 0.15 } : undefined} />
-          <span className="text-[9px] font-black uppercase tracking-wide">{label}</span>
+          {/* Active tab is an indigo pill — the mockup's Material 3 pill SHAPE
+              (a clear "you are here" affordance) but in the app's own accent, so
+              green stays reserved for its "safe / all-clear" meaning (safe hero,
+              shelter pins, Navigate status). The pill wraps an inner span so it
+              hugs its content instead of filling the full-height flex-1 button. */}
+          <span
+            className={`flex flex-col items-center justify-center gap-0.5 rounded-full transition-colors px-4 py-1 ${
+              active ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <Icon className="w-5 h-5" style={active ? { fill: 'currentColor', fillOpacity: 0.2 } : undefined} strokeWidth={active ? 2.5 : 2} />
+            <span className="text-[9px] font-black uppercase tracking-wide">{label}</span>
+          </span>
         </button>
       ))}
     </div>
