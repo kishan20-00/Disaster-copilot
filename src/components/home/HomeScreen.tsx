@@ -266,9 +266,11 @@ export function HomeScreen({
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={onOpenFamily}
-            className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
+            className="bg-sky-50 border border-sky-200 rounded-2xl p-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
           >
-            <Users className="w-6 h-6 text-indigo-500" />
+            <span className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center mb-0.5">
+              <Users className="w-5 h-5 text-sky-600" />
+            </span>
             <span className="text-[11px] font-black text-slate-900">Family</span>
             <span className={`text-[9.5px] font-mono ${inHarm > 0 ? 'text-red-600' : 'text-slate-500'}`}>
               {family.length === 0 ? 'No one added' : inHarm > 0 ? `${inHarm} in affected area` : 'All clear'}
@@ -276,11 +278,15 @@ export function HomeScreen({
           </button>
           <button
             onClick={onOpenAlerts}
-            className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
+            className={`rounded-2xl p-4 flex flex-col items-center gap-1.5 active:scale-95 transition border ${
+              worst ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'
+            }`}
           >
-            <AlertTriangle className="w-6 h-6 text-amber-500" />
+            <span className={`w-10 h-10 rounded-full flex items-center justify-center mb-0.5 ${worst ? 'bg-rose-100' : 'bg-amber-100'}`}>
+              <AlertTriangle className={`w-5 h-5 ${worst ? 'text-rose-600' : 'text-amber-600'}`} />
+            </span>
             <span className="text-[11px] font-black text-slate-900">Alerts</span>
-            <span className="text-[9.5px] font-mono text-slate-500">
+            <span className={`text-[9.5px] font-mono ${worst ? 'text-rose-600' : 'text-slate-500'}`}>
               {worst
                 ? `${hazardInfo(activeHazard).label}${worst.impact.distanceKm !== null ? ` · ${Math.round(worst.impact.distanceKm)} km` : ''}`
                 : 'No active alert'}
@@ -294,16 +300,20 @@ export function HomeScreen({
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => { onSelectCategory('medical'); onNavigateToMap(); }}
-              className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col items-center gap-2 active:scale-95 transition"
+              className="bg-violet-50 border border-violet-200 rounded-2xl p-5 flex flex-col items-center gap-2 active:scale-95 transition"
             >
-              <Stethoscope className="w-6 h-6 text-indigo-500" />
+              <span className="w-11 h-11 rounded-full bg-violet-100 flex items-center justify-center">
+                <Stethoscope className="w-5 h-5 text-violet-600" />
+              </span>
               <span className="text-[11px] font-black text-slate-900">Medical</span>
             </button>
             <button
               onClick={() => { onSelectCategory('shelter'); onNavigateToMap(); }}
-              className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col items-center gap-2 active:scale-95 transition"
+              className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex flex-col items-center gap-2 active:scale-95 transition"
             >
-              <HomeIcon className="w-6 h-6 text-indigo-500" />
+              <span className="w-11 h-11 rounded-full bg-emerald-100 flex items-center justify-center">
+                <HomeIcon className="w-5 h-5 text-emerald-600" />
+              </span>
               <span className="text-[11px] font-black text-slate-900">Shelter</span>
             </button>
           </div>
