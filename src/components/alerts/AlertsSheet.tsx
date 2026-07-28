@@ -41,11 +41,29 @@ export function AlertsSheet({ show, threatScan, isSimulating, onClose, onRescan 
         <div className="shrink-0 px-5 pt-4 pb-3 flex items-center justify-between border-b border-slate-200">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4.5 h-4.5 text-amber-500" />
-            <h3 className="text-sm font-black text-slate-900">Live Alerts</h3>
+            <div>
+              <h3 className="text-sm font-black text-slate-900 leading-tight">Live Alerts</h3>
+              <p className="text-[9.5px] text-slate-500 font-mono">Live updates in your area</p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {/* Rescan is a small secondary control, not a full-width bar: on an
+                alerts feed the primary action is reading, not re-scanning. It
+                doubles as the live-state cue — the radar spins while a scan is
+                in flight. */}
+            <button
+              onClick={onRescan}
+              disabled={isSimulating}
+              className="flex items-center gap-1 pl-2 pr-2.5 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-600 disabled:opacity-45 disabled:pointer-events-none transition active:scale-95"
+              title="Rescan hazard feeds"
+            >
+              <Radar className={`w-3.5 h-3.5 ${isSimulating ? 'animate-spin' : ''}`} style={{ animationDuration: '2.5s' }} />
+              <span className="text-[9.5px] font-black uppercase tracking-wide">{isSimulating ? 'Scanning' : 'Rescan'}</span>
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 scrollbar-none">
@@ -118,17 +136,6 @@ export function AlertsSheet({ show, threatScan, isSimulating, onClose, onRescan 
               );
             })
           )}
-        </div>
-
-        <div className="shrink-0 px-5 py-4 border-t border-slate-200">
-          <button
-            onClick={onRescan}
-            disabled={isSimulating}
-            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-45 disabled:pointer-events-none text-white rounded-xl text-[11px] font-black uppercase tracking-wide transition active:scale-95 flex items-center justify-center gap-1.5"
-          >
-            <Radar className="w-3.5 h-3.5" />
-            Rescan
-          </button>
         </div>
       </div>
     </div>
