@@ -12,11 +12,11 @@ interface AlertsSheetProps {
 }
 
 const SEVERITY_STYLE: Record<Severity, string> = {
-  extreme: 'bg-red-950/30 border-red-500/45 text-red-200',
-  severe: 'bg-orange-950/30 border-orange-500/45 text-orange-200',
-  moderate: 'bg-amber-950/30 border-amber-500/45 text-amber-200',
-  minor: 'bg-sky-950/25 border-sky-500/35 text-sky-200',
-  none: 'bg-slate-900/60 border-slate-800/60 text-slate-300'
+  extreme: 'bg-red-50 border-red-300 text-red-800',
+  severe: 'bg-orange-50 border-orange-300 text-orange-800',
+  moderate: 'bg-amber-50 border-amber-300 text-amber-800',
+  minor: 'bg-sky-50 border-sky-300 text-sky-800',
+  none: 'bg-slate-50 border-slate-200 text-slate-600'
 };
 
 const RESPONSE_LABEL: Record<string, { text: string; Icon: typeof Footprints }> = {
@@ -37,13 +37,13 @@ export function AlertsSheet({ show, threatScan, isSimulating, onClose, onRescan 
 
   return (
     <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-50 flex flex-col justify-end animate-in fade-in duration-200">
-      <div className="bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85%] flex flex-col animate-in slide-in-from-bottom duration-300">
-        <div className="shrink-0 px-5 pt-4 pb-3 flex items-center justify-between border-b border-slate-800/60">
+      <div className="bg-white border-t border-slate-200 rounded-t-3xl max-h-[85%] flex flex-col animate-in slide-in-from-bottom duration-300">
+        <div className="shrink-0 px-5 pt-4 pb-3 flex items-center justify-between border-b border-slate-200">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4.5 h-4.5 text-amber-400" />
-            <h3 className="text-sm font-black text-white">Live Alerts</h3>
+            <AlertTriangle className="w-4.5 h-4.5 text-amber-500" />
+            <h3 className="text-sm font-black text-slate-900">Live Alerts</h3>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition">
+          <button onClick={onClose} className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -51,26 +51,26 @@ export function AlertsSheet({ show, threatScan, isSimulating, onClose, onRescan 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 scrollbar-none">
           {!threatScan ? (
             <div className="py-8 text-center space-y-3">
-              <Radar className="w-8 h-8 text-slate-600 mx-auto" />
+              <Radar className="w-8 h-8 text-slate-300 mx-auto" />
               <p className="text-[11px] text-slate-500 font-mono leading-relaxed max-w-[240px] mx-auto">
                 No scan yet. Run a safety check to see live events near you.
               </p>
             </div>
           ) : threatScan.status === 'scanning' ? (
             <div className="py-8 text-center space-y-3">
-              <Radar className="w-8 h-8 text-indigo-400 mx-auto animate-spin" style={{ animationDuration: '2.5s' }} />
-              <p className="text-[11px] text-slate-400 font-mono">Scanning live hazard feeds…</p>
+              <Radar className="w-8 h-8 text-indigo-500 mx-auto animate-spin" style={{ animationDuration: '2.5s' }} />
+              <p className="text-[11px] text-slate-500 font-mono">Scanning live hazard feeds…</p>
             </div>
           ) : threatScan.status === 'unavailable' ? (
             <div className="py-8 text-center space-y-3">
-              <WifiOff className="w-8 h-8 text-amber-400 mx-auto" />
-              <p className="text-[11px] text-amber-200/90 font-mono leading-relaxed max-w-[260px] mx-auto">
+              <WifiOff className="w-8 h-8 text-amber-500 mx-auto" />
+              <p className="text-[11px] text-amber-800/90 font-mono leading-relaxed max-w-[260px] mx-auto">
                 No hazard feed could be reached, so this is not an all-clear. Retry once you have a connection.
               </p>
             </div>
           ) : events.length === 0 ? (
             <div className="py-8 text-center space-y-3">
-              <AlertTriangle className="w-8 h-8 text-slate-600 mx-auto" />
+              <AlertTriangle className="w-8 h-8 text-slate-300 mx-auto" />
               <p className="text-[11px] text-slate-500 font-mono">No recent events found near you.</p>
             </div>
           ) : (
@@ -88,7 +88,7 @@ export function AlertsSheet({ show, threatScan, isSimulating, onClose, onRescan 
                       {impact.severity === 'none' ? info.label : `${impact.severity} ${info.label}`}
                     </span>
                     {impact.affected && (
-                      <span className="text-[9px] font-black uppercase tracking-wide bg-black/25 px-2 py-0.5 rounded-md shrink-0">
+                      <span className="text-[9px] font-black uppercase tracking-wide bg-white/60 px-2 py-0.5 rounded-md shrink-0">
                         Acting on this
                       </span>
                     )}
@@ -97,7 +97,7 @@ export function AlertsSheet({ show, threatScan, isSimulating, onClose, onRescan 
                   <p className="text-[11px] font-mono leading-snug break-words">{hazard.headline}</p>
 
                   {impact.affected && (
-                    <div className="flex items-center gap-1.5 bg-black/25 rounded-xl px-2.5 py-1.5">
+                    <div className="flex items-center gap-1.5 bg-white/60 rounded-xl px-2.5 py-1.5">
                       <response.Icon className="w-3.5 h-3.5 shrink-0" />
                       <span className="text-[10.5px] font-black uppercase tracking-wide">{response.text}</span>
                     </div>
@@ -120,7 +120,7 @@ export function AlertsSheet({ show, threatScan, isSimulating, onClose, onRescan 
           )}
         </div>
 
-        <div className="shrink-0 px-5 py-4 border-t border-slate-800/60">
+        <div className="shrink-0 px-5 py-4 border-t border-slate-200">
           <button
             onClick={onRescan}
             disabled={isSimulating}

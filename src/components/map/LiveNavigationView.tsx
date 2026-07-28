@@ -59,14 +59,14 @@ export function LiveNavigationView({
         <div className="flex items-center gap-2">
           <button
             onClick={onExitToBrowse}
-            className="w-11 h-11 rounded-full bg-slate-900/85 backdrop-blur border border-slate-800/80 text-slate-200 flex items-center justify-center shadow-lg active:scale-95 transition"
+            className="w-11 h-11 rounded-full bg-white/85 backdrop-blur border border-slate-200 text-slate-700 flex items-center justify-center shadow-lg active:scale-95 transition"
             aria-label="Back"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <button
             onClick={onExitToBrowse}
-            className="h-9 px-3.5 rounded-full bg-slate-900/85 backdrop-blur border border-slate-800/80 text-slate-300 text-[11px] font-bold flex items-center gap-1.5 shadow-lg active:scale-95 transition"
+            className="h-9 px-3.5 rounded-full bg-white/85 backdrop-blur border border-slate-200 text-slate-600 text-[11px] font-bold flex items-center gap-1.5 shadow-lg active:scale-95 transition"
           >
             <Search className="w-3.5 h-3.5" />
             Search
@@ -83,17 +83,17 @@ export function LiveNavigationView({
 
       <div className="px-4 pt-3 flex flex-col gap-3 pointer-events-auto">
         {isSimulating && (
-          <div className="self-center bg-slate-900/90 backdrop-blur border border-indigo-500/40 rounded-full px-3 py-1.5 flex items-center gap-2">
+          <div className="self-center bg-white/90 backdrop-blur border border-indigo-500/40 rounded-full px-3 py-1.5 flex items-center gap-2">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-400" />
             </span>
-            <span className="text-[10.5px] font-bold text-slate-200">Rerouting…</span>
+            <span className="text-[10.5px] font-bold text-slate-700">Rerouting…</span>
           </div>
         )}
 
         {/* Direction card */}
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800/80 rounded-3xl p-5 flex items-center gap-4 shadow-xl">
+        <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-3xl p-5 flex items-center gap-4 shadow-xl">
           <div
             className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 shadow-md transition-transform"
             style={{ transform: bearing !== null ? `rotate(${bearing}deg)` : undefined }}
@@ -101,10 +101,10 @@ export function LiveNavigationView({
             <ArrowLeft className="w-8 h-8 text-white" style={{ transform: 'rotate(135deg)' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xl font-black text-white leading-tight truncate">
+            <p className="text-xl font-black text-slate-900 leading-tight truncate">
               Head toward {liveShelter?.name ?? 'your shelter'}
             </p>
-            <p className="text-lg text-indigo-400 font-bold mt-0.5">
+            <p className="text-lg text-indigo-600 font-bold mt-0.5">
               {remainingM !== null ? `${formatDistance(remainingM)} remaining` : (liveRoute?.distanceText ?? '—')}
             </p>
           </div>
@@ -126,7 +126,7 @@ export function LiveNavigationView({
           className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg border transition active:scale-95 ${
             mapLayer !== 'streets'
               ? 'bg-indigo-600 border-indigo-400 text-white'
-              : 'bg-slate-900/85 backdrop-blur border-slate-800/80 text-slate-300'
+              : 'bg-white/85 backdrop-blur border-slate-200 text-slate-600'
           }`}
           title={`Layer: ${mapLayer}`}
         >
@@ -161,17 +161,17 @@ export function LiveNavigationView({
       )}
 
       {/* Bottom sheet */}
-      <div className="bg-slate-900 border-t border-slate-800 rounded-t-[32px] px-4 pt-3 pb-6 pointer-events-auto relative overflow-hidden">
-        <div className="absolute top-0 left-0 h-1 bg-slate-800 w-full">
+      <div className="bg-white border-t border-slate-200 rounded-t-[32px] px-4 pt-3 pb-6 pointer-events-auto relative overflow-hidden">
+        <div className="absolute top-0 left-0 h-1 bg-slate-200 w-full">
           <div className="h-full bg-indigo-500 transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
         </div>
-        <div className="w-12 h-1.5 bg-slate-700 rounded-full mx-auto mb-4 mt-2" />
+        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-4 mt-2" />
         <div className="flex justify-between items-end mb-5">
           <div>
-            <h2 className="text-4xl font-black text-white tracking-tight">{liveRoute?.durationText ?? '—'}</h2>
-            <p className="text-sm text-slate-400 flex items-center gap-2 mt-1.5 font-medium">
+            <h2 className="text-4xl font-black text-slate-900 tracking-tight">{liveRoute?.durationText ?? '—'}</h2>
+            <p className="text-sm text-slate-500 flex items-center gap-2 mt-1.5 font-medium">
               {liveRoute?.distanceText ?? '—'}
-              <span className="w-1 h-1 bg-slate-600 rounded-full" />
+              <span className="w-1 h-1 bg-slate-300 rounded-full" />
               {now}
             </p>
           </div>

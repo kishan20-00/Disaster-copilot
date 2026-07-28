@@ -91,7 +91,7 @@ export function EnableLocationState({ mapsReady, location, onRetry }: EnableLoca
   const { Icon, amber } = view;
 
   return (
-    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center px-7 text-center bg-slate-950 overflow-y-auto py-12 scrollbar-none">
+    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center px-7 text-center bg-white overflow-y-auto py-12 scrollbar-none">
       <div
         className={`w-20 h-20 rounded-3xl border flex items-center justify-center mb-5 shrink-0 ${
           amber ? 'border-amber-500/40 bg-amber-500/10' : 'border-indigo-500/40 bg-indigo-500/10'
@@ -103,14 +103,14 @@ export function EnableLocationState({ mapsReady, location, onRetry }: EnableLoca
         />
       </div>
 
-      <h2 className="text-white font-black text-lg tracking-tight font-sans">{view.title}</h2>
-      <p className="text-slate-400 text-xs leading-relaxed mt-2 max-w-[300px] font-mono">{view.body}</p>
+      <h2 className="text-slate-900 font-black text-lg tracking-tight font-sans">{view.title}</h2>
+      <p className="text-slate-500 text-xs leading-relaxed mt-2 max-w-[300px] font-mono">{view.body}</p>
 
       {view.steps.length > 0 && (
         <ol className="mt-4 space-y-2 text-left max-w-[310px]">
           {view.steps.map((step, i) => (
-            <li key={i} className="flex gap-2 text-[10.5px] text-slate-300 font-mono leading-relaxed">
-              <span className="shrink-0 w-4 h-4 rounded-full bg-slate-800 text-slate-400 text-[9px] font-bold flex items-center justify-center mt-0.5">
+            <li key={i} className="flex gap-2 text-[10.5px] text-slate-600 font-mono leading-relaxed">
+              <span className="shrink-0 w-4 h-4 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold flex items-center justify-center mt-0.5">
                 {i + 1}
               </span>
               {step}

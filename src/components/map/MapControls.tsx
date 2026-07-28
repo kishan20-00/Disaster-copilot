@@ -28,7 +28,7 @@ export function MapControls({
           className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-lg border transition ${
             showLayerMenu || mapLayer !== 'streets'
               ? 'bg-indigo-600 border-indigo-400 text-white'
-              : 'bg-slate-900/85 backdrop-blur border-slate-800/80 text-slate-300 hover:text-white'
+              : 'bg-white/85 backdrop-blur border-slate-200 text-slate-600 hover:text-slate-900'
           }`}
           title="Map Layers"
         >
@@ -37,7 +37,7 @@ export function MapControls({
 
         {/* Floating Layers Dropdown */}
         {showLayerMenu && (
-          <div className="absolute right-11 top-0 bg-slate-900/95 backdrop-blur border border-slate-800 rounded-xl p-2 shadow-2xl flex flex-col gap-1.5 min-w-[120px] animate-in fade-in zoom-in-95 duration-200">
+          <div className="absolute right-11 top-0 bg-white/95 backdrop-blur border border-slate-200 rounded-xl p-2 shadow-2xl flex flex-col gap-1.5 min-w-[120px] animate-in fade-in zoom-in-95 duration-200">
             {[
               { id: 'streets', label: 'Vector Map' },
               { id: 'satellite', label: 'Satellite' },
@@ -53,7 +53,7 @@ export function MapControls({
                 className={`text-left text-[10px] font-extrabold uppercase px-2.5 py-1.5 rounded-lg transition ${
                   mapLayer === layer.id
                     ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
                 {layer.label}
@@ -66,7 +66,7 @@ export function MapControls({
       {/* Recenter Button */}
       <button
         onClick={onRecenter}
-        className="w-9 h-9 rounded-xl bg-slate-900/85 backdrop-blur border border-slate-800/80 text-slate-300 hover:text-white flex items-center justify-center shadow-lg active:scale-95 transition"
+        className="w-9 h-9 rounded-xl bg-white/85 backdrop-blur border border-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center shadow-lg active:scale-95 transition"
         title="Recenter Map"
       >
         <Navigation className="w-4 h-4 transform rotate-45" />
@@ -78,7 +78,7 @@ export function MapControls({
         className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-lg border transition active:scale-95 ${
           voiceAssistant
             ? 'bg-emerald-600 border-emerald-400 text-white animate-pulse'
-            : 'bg-slate-900/85 backdrop-blur border-slate-800/80 text-slate-300 hover:text-white'
+            : 'bg-white/85 backdrop-blur border-slate-200 text-slate-600 hover:text-slate-900'
         }`}
         title="Audio Co-pilot Guidance"
       >
@@ -91,7 +91,7 @@ export function MapControls({
         className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-lg border transition active:scale-95 ${
           cameraMode
             ? 'bg-violet-600 border-violet-400 text-white'
-            : 'bg-slate-900/85 backdrop-blur border-slate-800/80 text-slate-300 hover:text-white'
+            : 'bg-white/85 backdrop-blur border-slate-200 text-slate-600 hover:text-slate-900'
         }`}
         title="AR Camera View"
       >

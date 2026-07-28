@@ -9,11 +9,11 @@ interface StandbyPanelProps {
 export function StandbyPanel({ labels, onTriggerAlert }: StandbyPanelProps) {
   return (
     <div className="flex flex-col justify-center items-center py-6 text-center animate-in fade-in duration-300">
-      <div className="w-12 h-16 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
-        <Smartphone className="w-6 h-6 text-indigo-400 animate-pulse" />
+      <div className="w-12 h-16 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
+        <Smartphone className="w-6 h-6 text-indigo-500 animate-pulse" />
       </div>
-      <h4 className="text-[11.5px] font-bold text-slate-200 font-sans">SafeRoute AI Evacuation Assistant</h4>
-      <p className="text-slate-400 text-[10px] px-6 mt-1.5 leading-relaxed max-w-[280px]">
+      <h4 className="text-[11.5px] font-bold text-slate-800 font-sans">SafeRoute AI Evacuation Assistant</h4>
+      <p className="text-slate-500 text-[10px] px-6 mt-1.5 leading-relaxed max-w-[280px]">
         Checks JMA (earthquake, tsunami, typhoon) and the USGS worldwide catalog, then works out whether anything found actually reaches your position. Nothing is triggered unless it does.
       </p>
 

@@ -76,12 +76,12 @@ export function HomeScreen({
 
   return (
     <div className="absolute inset-0">
-    <div className="absolute inset-0 overflow-y-auto pb-20 scrollbar-none bg-slate-950">
+    <div className="absolute inset-0 overflow-y-auto pb-20 scrollbar-none bg-white">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-slate-950/90 backdrop-blur border-b border-slate-900 px-4 py-3 flex items-center justify-between">
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Shield className="w-5 h-5 text-indigo-400" />
-          <span className="text-sm font-black text-white tracking-tight">SafeRoute AI</span>
+          <Shield className="w-5 h-5 text-indigo-500" />
+          <span className="text-sm font-black text-slate-900 tracking-tight">SafeRoute AI</span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -96,13 +96,13 @@ export function HomeScreen({
               small avatar icon buried in the Navigate tab's search bar. */}
           <button
             onClick={onOpenProfile}
-            className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 active:scale-95 transition overflow-hidden"
+            className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 active:scale-95 transition overflow-hidden"
             title="Settings"
           >
             {user?.avatar ? (
               <img src={user.avatar} alt="" className="w-full h-full object-cover" />
             ) : (
-              <User className="w-4 h-4 text-slate-400" />
+              <User className="w-4 h-4 text-slate-500" />
             )}
           </button>
         </div>
@@ -110,30 +110,30 @@ export function HomeScreen({
 
       <div className="px-4 py-4 flex flex-col gap-4">
         {/* System Readiness (collapsible) */}
-        <section className="bg-slate-950/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+        <section className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden">
           <button
             onClick={() => setShowStatus((v) => !v)}
             className="w-full flex items-center justify-between px-3.5 py-2.5"
           >
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10.5px] font-bold text-slate-200">System Readiness</span>
+              <span className="text-[10.5px] font-bold text-slate-700">System Readiness</span>
             </div>
             {showStatus ? <ChevronUp className="w-3.5 h-3.5 text-slate-500" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-500" />}
           </button>
           {showStatus && (
             <div className="grid grid-cols-3 gap-2 px-3.5 pb-3.5 text-[9.5px]">
-              <div className="flex flex-col items-center gap-1 bg-slate-900/60 rounded-xl p-2 border border-slate-800/60">
-                <Wifi className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="text-slate-400 text-center leading-tight">{locationCoarse ? 'Coarse GPS' : 'High-precision GPS'}</span>
+              <div className="flex flex-col items-center gap-1 bg-white rounded-xl p-2 border border-slate-200">
+                <Wifi className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="text-slate-500 text-center leading-tight">{locationCoarse ? 'Coarse GPS' : 'High-precision GPS'}</span>
               </div>
-              <div className="flex flex-col items-center gap-1 bg-slate-900/60 rounded-xl p-2 border border-slate-800/60">
-                <MapIcon className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="text-slate-400 text-center leading-tight">{googleMapsLoaded ? 'Maps ready' : 'Loading maps'}</span>
+              <div className="flex flex-col items-center gap-1 bg-white rounded-xl p-2 border border-slate-200">
+                <MapIcon className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="text-slate-500 text-center leading-tight">{googleMapsLoaded ? 'Maps ready' : 'Loading maps'}</span>
               </div>
-              <div className="flex flex-col items-center gap-1 bg-slate-900/60 rounded-xl p-2 border border-slate-800/60">
-                <Radar className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="text-slate-400 text-center leading-tight">
+              <div className="flex flex-col items-center gap-1 bg-white rounded-xl p-2 border border-slate-200">
+                <Radar className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="text-slate-500 text-center leading-tight">
                   {threatScan?.status === 'scanning' ? 'Scanning' : threatScan ? 'Last checked' : 'Standby'}
                 </span>
               </div>
@@ -146,18 +146,18 @@ export function HomeScreen({
 
         {/* Hero */}
         {isSimulating ? (
-          <section className="bg-indigo-950/25 border border-indigo-500/30 rounded-[28px] p-6 flex flex-col items-center text-center gap-3">
-            <Radar className="w-10 h-10 text-indigo-400 animate-spin" style={{ animationDuration: '2.5s' }} />
-            <h2 className="text-xl font-black text-white">Analyzing…</h2>
-            <p className="text-[11px] text-slate-400 font-mono">
+          <section className="bg-indigo-50 border border-indigo-300 rounded-[28px] p-6 flex flex-col items-center text-center gap-3">
+            <Radar className="w-10 h-10 text-indigo-500 animate-spin" style={{ animationDuration: '2.5s' }} />
+            <h2 className="text-xl font-black text-slate-900">Analyzing…</h2>
+            <p className="text-[11px] text-slate-500 font-mono">
               {agents[currentStep]?.name ?? 'Running safety pipeline'}
             </p>
           </section>
         ) : currentStep < 0 && !threatScan ? (
-          <section className="bg-slate-950/60 border border-slate-800/60 rounded-[28px] p-6 flex flex-col items-center text-center gap-3">
-            <Shield className="w-12 h-12 text-indigo-400" />
-            <h2 className="text-xl font-black text-white">SafeRoute AI Active</h2>
-            <p className="text-[11px] text-slate-400 leading-relaxed max-w-[280px]">
+          <section className="bg-slate-50 border border-slate-200 rounded-[28px] p-6 flex flex-col items-center text-center gap-3">
+            <Shield className="w-12 h-12 text-indigo-500" />
+            <h2 className="text-xl font-black text-slate-900">SafeRoute AI Active</h2>
+            <p className="text-[11px] text-slate-500 leading-relaxed max-w-[280px]">
               Checks JMA and worldwide hazard feeds, then works out whether anything found actually reaches your position.
             </p>
             <button
@@ -169,10 +169,10 @@ export function HomeScreen({
             </button>
           </section>
         ) : threatScan?.status === 'unavailable' ? (
-          <section className="bg-amber-950/25 border border-amber-500/40 rounded-[28px] p-6 flex flex-col items-center text-center gap-3">
-            <AlertTriangle className="w-12 h-12 text-amber-400" />
-            <h2 className="text-xl font-black text-white">Status unknown</h2>
-            <p className="text-[11px] text-amber-200/90 leading-relaxed max-w-[280px]">
+          <section className="bg-amber-50 border border-amber-300 rounded-[28px] p-6 flex flex-col items-center text-center gap-3">
+            <AlertTriangle className="w-12 h-12 text-amber-500" />
+            <h2 className="text-xl font-black text-slate-900">Status unknown</h2>
+            <p className="text-[11px] text-amber-800/90 leading-relaxed max-w-[280px]">
               No hazard feed could be reached, so this is not an all-clear. Retry once you have a connection.
             </p>
             <button
@@ -185,15 +185,15 @@ export function HomeScreen({
         ) : worst ? (
           <section className={`rounded-[28px] p-6 flex flex-col items-center text-center gap-3 border ${hazardInfo(activeHazard).tone}`}>
             <AlertTriangle className="w-12 h-12 animate-pulse" />
-            <h2 className="text-xl font-black text-white">{hazardInfo(activeHazard).label} detected</h2>
+            <h2 className="text-xl font-black">{hazardInfo(activeHazard).label} detected</h2>
             <p className="text-[11px] opacity-90 leading-relaxed max-w-[280px]">{worst.hazard.headline}</p>
             <div className="grid grid-cols-2 gap-3 w-full mt-1">
-              <div className="bg-black/25 rounded-2xl p-3 flex flex-col items-center gap-1">
+              <div className="bg-white/60 rounded-2xl p-3 flex flex-col items-center gap-1">
                 <HomeIcon className="w-4 h-4" />
                 <span className="text-sm font-black">{shelter.distance}</span>
                 <span className="text-[9px] uppercase tracking-wide opacity-70">Nearest shelter</span>
               </div>
-              <div className="bg-black/25 rounded-2xl p-3 flex flex-col items-center gap-1">
+              <div className="bg-white/60 rounded-2xl p-3 flex flex-col items-center gap-1">
                 <Timer className="w-4 h-4" />
                 <span className="text-sm font-black">{liveRoute?.durationText ?? '—'}</span>
                 <span className="text-[9px] uppercase tracking-wide opacity-70">Evac ETA</span>
@@ -204,7 +204,7 @@ export function HomeScreen({
                 shelter-in-place hazard (e.g. typhoon) never computes one. */}
             <button
               onClick={onNavigateToMap}
-              className="mt-1 w-full bg-white/90 hover:bg-white text-slate-950 text-sm font-black py-3 rounded-full shadow-lg active:scale-95 transition flex items-center justify-center gap-2"
+              className="mt-1 w-full bg-slate-900/90 hover:bg-slate-900 text-white text-sm font-black py-3 rounded-full shadow-lg active:scale-95 transition flex items-center justify-center gap-2"
             >
               {hazardInfo(activeHazard).response === 'evacuate' ? (
                 <>
@@ -220,24 +220,24 @@ export function HomeScreen({
             </button>
           </section>
         ) : (
-          <section className="bg-emerald-950/20 border border-emerald-500/35 rounded-[28px] p-6 flex flex-col items-center text-center gap-3">
-            <ShieldCheck className="w-12 h-12 text-emerald-400" />
-            <h2 className="text-xl font-black text-white">You are safe</h2>
+          <section className="bg-emerald-50 border border-emerald-300 rounded-[28px] p-6 flex flex-col items-center text-center gap-3">
+            <ShieldCheck className="w-12 h-12 text-emerald-600" />
+            <h2 className="text-xl font-black text-slate-900">You are safe</h2>
             {hazardSignal && (
-              <div className="bg-black/20 border border-emerald-500/20 rounded-2xl p-3 flex gap-2 items-start text-left">
-                <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <p className="text-[10.5px] text-emerald-100/90 leading-relaxed">{hazardSignal.headline}</p>
+              <div className="bg-white/70 border border-emerald-300/60 rounded-2xl p-3 flex gap-2 items-start text-left">
+                <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <p className="text-[10.5px] text-emerald-900/90 leading-relaxed">{hazardSignal.headline}</p>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3 w-full mt-1">
-              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-3 flex flex-col items-center gap-1">
-                <HomeIcon className="w-4 h-4 text-indigo-400" />
-                <span className="text-sm font-black text-white">{shelter.distance}</span>
+              <div className="bg-white/60 border border-slate-200 rounded-2xl p-3 flex flex-col items-center gap-1">
+                <HomeIcon className="w-4 h-4 text-indigo-500" />
+                <span className="text-sm font-black text-slate-900">{shelter.distance}</span>
                 <span className="text-[9px] uppercase tracking-wide text-slate-500">Nearest shelter</span>
               </div>
-              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-3 flex flex-col items-center gap-1">
-                <Timer className="w-4 h-4 text-indigo-400" />
-                <span className="text-sm font-black text-white">{liveRoute?.durationText ?? '—'}</span>
+              <div className="bg-white/60 border border-slate-200 rounded-2xl p-3 flex flex-col items-center gap-1">
+                <Timer className="w-4 h-4 text-indigo-500" />
+                <span className="text-sm font-black text-slate-900">{liveRoute?.durationText ?? '—'}</span>
                 <span className="text-[9px] uppercase tracking-wide text-slate-500">Evac ETA</span>
               </div>
             </div>
@@ -251,12 +251,12 @@ export function HomeScreen({
         )}
 
         {/* AI Agent Status (collapsible) — reuses AgentPipelineConsole as-is */}
-        <section className="bg-slate-950/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+        <section className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden">
           <button
             onClick={() => setShowAgents((v) => !v)}
             className="w-full flex items-center justify-between px-3.5 py-2.5"
           >
-            <span className="text-[10.5px] font-bold text-slate-200">AI Agent Status</span>
+            <span className="text-[10.5px] font-bold text-slate-700">AI Agent Status</span>
             {showAgents ? <ChevronUp className="w-3.5 h-3.5 text-slate-500" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-500" />}
           </button>
           {showAgents && <div className="px-3.5 pb-3.5"><AgentPipelineConsole agents={agents} currentStep={currentStep} /></div>}
@@ -266,20 +266,20 @@ export function HomeScreen({
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={onOpenFamily}
-            className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
+            className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
           >
-            <Users className="w-6 h-6 text-indigo-400" />
-            <span className="text-[11px] font-black text-white">Family</span>
-            <span className={`text-[9.5px] font-mono ${inHarm > 0 ? 'text-red-400' : 'text-slate-500'}`}>
+            <Users className="w-6 h-6 text-indigo-500" />
+            <span className="text-[11px] font-black text-slate-900">Family</span>
+            <span className={`text-[9.5px] font-mono ${inHarm > 0 ? 'text-red-600' : 'text-slate-500'}`}>
               {family.length === 0 ? 'No one added' : inHarm > 0 ? `${inHarm} in affected area` : 'All clear'}
             </span>
           </button>
           <button
             onClick={onOpenAlerts}
-            className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
+            className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
           >
-            <AlertTriangle className="w-6 h-6 text-amber-400" />
-            <span className="text-[11px] font-black text-white">Alerts</span>
+            <AlertTriangle className="w-6 h-6 text-amber-500" />
+            <span className="text-[11px] font-black text-slate-900">Alerts</span>
             <span className="text-[9.5px] font-mono text-slate-500">
               {worst
                 ? `${hazardInfo(activeHazard).label}${worst.impact.distanceKm !== null ? ` · ${Math.round(worst.impact.distanceKm)} km` : ''}`
@@ -290,21 +290,21 @@ export function HomeScreen({
 
         {/* Quick Resources */}
         <div>
-          <h3 className="text-[10.5px] font-bold text-slate-300 mb-2 px-0.5">Quick Resources</h3>
+          <h3 className="text-[10.5px] font-bold text-slate-600 mb-2 px-0.5">Quick Resources</h3>
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => { onSelectCategory('medical'); onNavigateToMap(); }}
-              className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-5 flex flex-col items-center gap-2 active:scale-95 transition"
+              className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col items-center gap-2 active:scale-95 transition"
             >
-              <Stethoscope className="w-6 h-6 text-indigo-400" />
-              <span className="text-[11px] font-black text-white">Medical</span>
+              <Stethoscope className="w-6 h-6 text-indigo-500" />
+              <span className="text-[11px] font-black text-slate-900">Medical</span>
             </button>
             <button
               onClick={() => { onSelectCategory('shelter'); onNavigateToMap(); }}
-              className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-5 flex flex-col items-center gap-2 active:scale-95 transition"
+              className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col items-center gap-2 active:scale-95 transition"
             >
-              <HomeIcon className="w-6 h-6 text-indigo-400" />
-              <span className="text-[11px] font-black text-white">Shelter</span>
+              <HomeIcon className="w-6 h-6 text-indigo-500" />
+              <span className="text-[11px] font-black text-slate-900">Shelter</span>
             </button>
           </div>
         </div>

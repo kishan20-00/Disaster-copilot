@@ -21,7 +21,7 @@ export function CategoryChips({ filterCategory, onSelectCategory }: CategoryChip
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10.5px] font-extrabold tracking-wide uppercase transition border shadow-md active:scale-95 ${
               isActive
                 ? 'bg-indigo-600 border-indigo-400 text-white font-sans'
-                : 'bg-slate-900/85 backdrop-blur border-slate-800/80 text-slate-300 hover:text-white'
+                : 'bg-white/85 backdrop-blur border-slate-200 text-slate-600 hover:text-slate-900'
             }`}
           >
             <span className="text-xs leading-none">{chip.emoji}</span>

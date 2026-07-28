@@ -48,13 +48,13 @@ export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfi
 
   // One badge per genuine state, so a clear result never reads as a failure.
   const unassessed =
-    scanStatus === 'scanning' ? { label: 'Checking…', tone: 'bg-indigo-500/15 text-indigo-300', dot: 'bg-indigo-400 animate-pulse',
+    scanStatus === 'scanning' ? { label: 'Checking…', tone: 'bg-indigo-500/15 text-indigo-600', dot: 'bg-indigo-400 animate-pulse',
         note: 'Checking this place against the live feeds.' }
-    : scanStatus === 'clear' ? { label: 'No hazard', tone: 'bg-emerald-500/15 text-emerald-400', dot: 'bg-emerald-500',
+    : scanStatus === 'clear' ? { label: 'No hazard', tone: 'bg-emerald-500/15 text-emerald-600', dot: 'bg-emerald-500',
         note: 'No active hazard, so there is nothing for this place to be inside.' }
-    : scanStatus === 'unavailable' ? { label: 'Unknown', tone: 'bg-amber-500/15 text-amber-400', dot: 'bg-amber-500',
+    : scanStatus === 'unavailable' ? { label: 'Unknown', tone: 'bg-amber-500/15 text-amber-600', dot: 'bg-amber-500',
         note: 'Hazard feeds could not be reached, so this place could not be judged.' }
-    : { label: 'Not checked yet', tone: 'bg-slate-800/60 text-slate-500', dot: 'bg-slate-600',
+    : { label: 'Not checked yet', tone: 'bg-slate-200 text-slate-500', dot: 'bg-slate-400',
         note: 'Trigger an alert to check this place against live hazards.' };
 
   if (compact) {
@@ -66,40 +66,40 @@ export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfi
     const statusColor = family.length === 0
       ? 'text-slate-500'
       : familyStatus === null
-      ? (scanStatus === 'clear' ? 'text-emerald-400' : 'text-slate-500')
-      : inHarm > 0 ? 'text-red-400' : 'text-emerald-400';
+      ? (scanStatus === 'clear' ? 'text-emerald-600' : 'text-slate-500')
+      : inHarm > 0 ? 'text-red-600' : 'text-emerald-600';
 
     return (
       <button
         onClick={onOpenProfile}
-        className="w-full bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3 flex items-center justify-between active:scale-[0.99] transition"
+        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center justify-between active:scale-[0.99] transition"
       >
         <div className="flex items-center gap-1.5">
-          <Users className="w-4 h-4 text-indigo-400 shrink-0" />
-          <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans text-slate-300">Family places</span>
+          <Users className="w-4 h-4 text-indigo-500 shrink-0" />
+          <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans text-slate-600">Family places</span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <span className={`text-[9px] font-mono font-bold uppercase ${statusColor}`}>{statusText}</span>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
         </div>
       </button>
     );
   }
 
   return (
-    <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3.5 space-y-2.5">
-      <div className="flex items-center justify-between pb-1.5 border-b border-slate-900/60">
+    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5">
+      <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
         <div className="flex items-center gap-1.5">
-          <Users className="w-4 h-4 text-indigo-400" />
-          <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans text-slate-300">
+          <Users className="w-4 h-4 text-indigo-500" />
+          <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans text-slate-600">
             Family places
           </span>
         </div>
         {family.length > 0 && (
           <span className={`text-[9px] font-mono font-bold ${
             familyStatus === null
-              ? scanStatus === 'clear' ? 'text-emerald-400' : 'text-slate-500'
-              : inHarm ? 'text-red-400' : 'text-emerald-400'
+              ? scanStatus === 'clear' ? 'text-emerald-600' : 'text-slate-500'
+              : inHarm ? 'text-red-600' : 'text-emerald-600'
           }`}>
             {familyStatus === null
               ? (scanStatus === 'clear' ? 'NO ACTIVE HAZARD' : unassessed.label.toUpperCase())
@@ -135,22 +135,22 @@ export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfi
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-[10.5px] font-bold text-slate-200 font-sans">{member.name}</span>
+                    <span className="text-[10.5px] font-bold text-slate-800 font-sans">{member.name}</span>
                     <span className="text-[9px] font-mono text-slate-500">{member.relation}</span>
                   </div>
-                  <p className="text-[9.5px] font-mono text-slate-400 truncate">{member.place.name}</p>
-                  <p className="text-[9px] font-mono text-slate-600">
+                  <p className="text-[9.5px] font-mono text-slate-500 truncate">{member.place.name}</p>
+                  <p className="text-[9px] font-mono text-slate-400">
                     expected location · {describeAge(member.addedAt)}
                   </p>
                   {impact ? (
-                    <p className={`text-[9px] font-mono leading-snug mt-0.5 ${affected ? 'text-red-300' : 'text-emerald-500/80'}`}>
+                    <p className={`text-[9px] font-mono leading-snug mt-0.5 ${affected ? 'text-red-600' : 'text-emerald-600/80'}`}>
                       {affected
                         ? `Inside the ${hazardInfo(impact.hazard).label.toLowerCase()} affected area`
                         : 'Outside the affected area'}
                       {impact.distanceKm !== null && ` · ${Math.round(impact.distanceKm)} km from it`}
                     </p>
                   ) : (
-                    <p className="text-[9px] font-mono leading-snug mt-0.5 text-slate-600">{unassessed.note}</p>
+                    <p className="text-[9px] font-mono leading-snug mt-0.5 text-slate-400">{unassessed.note}</p>
                   )}
                 </div>
                 <span
@@ -158,8 +158,8 @@ export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfi
                     !impact
                       ? unassessed.tone
                       : affected
-                      ? 'bg-red-500/15 text-red-400'
-                      : 'bg-emerald-500/15 text-emerald-400'
+                      ? 'bg-red-500/15 text-red-600'
+                      : 'bg-emerald-500/15 text-emerald-600'
                   }`}
                 >
                   {!impact ? unassessed.label : affected ? 'At risk' : 'Clear'}
@@ -167,7 +167,7 @@ export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfi
                 {onRemove && (
                   <button
                     onClick={() => onRemove(member.id)}
-                    className="p-1 text-slate-500 hover:text-red-400 transition shrink-0"
+                    className="p-1 text-slate-400 hover:text-red-500 transition shrink-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -177,7 +177,7 @@ export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfi
           })}
 
           {/* A green dot must never be read as "this person is fine". */}
-          <p className="flex items-start gap-1.5 text-[9px] font-mono text-slate-600 leading-snug pt-1">
+          <p className="flex items-start gap-1.5 text-[9px] font-mono text-slate-400 leading-snug pt-1">
             <HelpCircle className="w-3 h-3 shrink-0 mt-0.5" />
             This checks places, not people. It cannot tell you whether someone is actually there, or safe.
           </p>

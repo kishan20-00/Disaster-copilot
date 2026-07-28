@@ -60,11 +60,11 @@ export function AROverlay({
               >
                 <Navigation className="w-12 h-12 text-emerald-400" style={{ transform: 'rotate(-45deg)' }} />
               </div>
-              <div className="bg-slate-900/80 backdrop-blur-md border border-emerald-500/40 rounded-2xl px-5 py-3 text-center">
-                <p className="text-emerald-400 font-black text-base leading-tight">
+              <div className="bg-white/80 backdrop-blur-md border border-emerald-500/40 rounded-2xl px-5 py-3 text-center">
+                <p className="text-emerald-600 font-black text-base leading-tight">
                   {shelterName}
                 </p>
-                <p className="text-white/60 text-[11px] font-mono mt-0.5">
+                <p className="text-slate-500 text-[11px] font-mono mt-0.5">
                   {liveRoute
                     ? `${liveRoute.distanceText} · ${liveRoute.durationText}`
                     : shelterDistance}
@@ -72,20 +72,20 @@ export function AROverlay({
               </div>
             </>
           ) : (
-            <div className="bg-slate-900/75 backdrop-blur-md border border-slate-700/60 rounded-2xl px-5 py-3 text-center">
-              <p className="text-slate-300 text-xs font-mono">Trigger alert to activate AR navigation</p>
+            <div className="bg-white/75 backdrop-blur-md border border-slate-200 rounded-2xl px-5 py-3 text-center">
+              <p className="text-slate-600 text-xs font-mono">Trigger alert to activate AR navigation</p>
             </div>
           )}
         </div>
 
         {/* Bottom: current action step card */}
         {currentStep >= 4 && firstStep && (
-          <div className="w-full bg-slate-950/90 backdrop-blur-md border border-indigo-500/30 rounded-2xl p-4 shadow-2xl">
+          <div className="w-full bg-white/90 backdrop-blur-md border border-indigo-500/30 rounded-2xl p-4 shadow-2xl">
             <div className="flex items-center gap-2 mb-1.5">
               <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-[9px] font-black text-white shrink-0">1</div>
-              <span className="text-white font-black text-sm leading-tight">{firstStep.title}</span>
+              <span className="text-slate-900 font-black text-sm leading-tight">{firstStep.title}</span>
             </div>
-            <p className="text-slate-300 text-[11px] leading-relaxed font-mono">{firstStep.desc}</p>
+            <p className="text-slate-600 text-[11px] leading-relaxed font-mono">{firstStep.desc}</p>
           </div>
         )}
       </div>

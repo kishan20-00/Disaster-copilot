@@ -97,11 +97,11 @@ export function FamilyScreen({
   };
 
   return (
-    <div className="absolute inset-0 overflow-y-auto pb-20 scrollbar-none bg-slate-950">
-      <div className="sticky top-0 z-10 bg-slate-950/90 backdrop-blur border-b border-slate-900 px-4 py-3 flex items-center justify-between">
+    <div className="absolute inset-0 overflow-y-auto pb-20 scrollbar-none bg-white">
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Shield className="w-5 h-5 text-indigo-400" />
-          <span className="text-sm font-black text-white tracking-tight">Family</span>
+          <Shield className="w-5 h-5 text-indigo-500" />
+          <span className="text-sm font-black text-slate-900 tracking-tight">Family</span>
         </div>
         {user && !adding && (
           <button
@@ -115,22 +115,22 @@ export function FamilyScreen({
 
       <div className="px-4 py-4 flex flex-col gap-4">
         {!user ? (
-          <div className="bg-slate-950/60 border border-indigo-500/30 rounded-2xl p-4 flex flex-col items-center text-center gap-2.5">
-            <Shield className="w-6 h-6 text-indigo-400" />
-            <p className="text-[10px] font-mono text-slate-400 leading-snug">
+          <div className="bg-slate-50 border border-indigo-300 rounded-2xl p-4 flex flex-col items-center text-center gap-2.5">
+            <Shield className="w-6 h-6 text-indigo-500" />
+            <p className="text-[10px] font-mono text-slate-500 leading-snug">
               Sign in with Google to add family places and sync them across your devices.
             </p>
             <div id="google-signin-button" className="w-full flex justify-center h-11" />
             {authLoading === 'google' && (
-              <div className="text-[9.5px] text-indigo-400 font-mono flex items-center gap-1.5 animate-pulse">
-                <span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" />
+              <div className="text-[9.5px] text-indigo-500 font-mono flex items-center gap-1.5 animate-pulse">
+                <span className="w-3 h-3 border border-indigo-500 border-t-transparent rounded-full animate-spin" />
                 Securely connecting to Google Identity Services...
               </div>
             )}
           </div>
         ) : family.length === 0 && !onboardingSkipped && !adding ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-6 py-10">
-            <h2 className="text-xl font-black text-white leading-snug px-4">
+            <h2 className="text-xl font-black text-slate-900 leading-snug px-4">
               Protect the people who matter most.
             </h2>
             <div className="w-full flex flex-col gap-3 px-2">
@@ -143,7 +143,7 @@ export function FamilyScreen({
               </button>
               <button
                 onClick={() => setOnboardingSkipped(true)}
-                className="w-full py-2.5 text-slate-500 hover:text-slate-300 text-[11px] font-bold transition"
+                className="w-full py-2.5 text-slate-500 hover:text-slate-700 text-[11px] font-bold transition"
               >
                 Skip for now
               </button>
@@ -152,18 +152,18 @@ export function FamilyScreen({
         ) : (
           <>
             {adding && (
-              <div className="bg-slate-950 border border-indigo-500/30 rounded-xl p-3 space-y-2.5">
+              <div className="bg-slate-50 border border-indigo-300 rounded-xl p-3 space-y-2.5">
                 <input
                   value={name} onChange={(e) => setName(e.target.value)}
                   placeholder="Name"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/60"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500/60"
                 />
                 <div className="flex flex-wrap gap-1.5">
                   {RELATION_PRESETS.map((r) => (
                     <button key={r} onClick={() => setRelation(r)}
                       className={`px-2 py-1 rounded-lg border text-[9.5px] font-bold transition ${
-                        relation === r ? 'bg-indigo-600/25 border-indigo-500/60 text-indigo-100'
-                                       : 'bg-slate-900 border-slate-800 text-slate-400'
+                        relation === r ? 'bg-indigo-600/15 border-indigo-500/60 text-indigo-700'
+                                       : 'bg-white border-slate-200 text-slate-500'
                       }`}>{r}</button>
                   ))}
                 </div>
@@ -171,14 +171,14 @@ export function FamilyScreen({
                   <input
                     value={placeQuery} onChange={(e) => searchPlace(e.target.value)}
                     placeholder="Where do you expect them to be?"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/60"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500/60"
                   />
                   {suggestions.length > 0 && (
-                    <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden z-10 shadow-2xl">
+                    <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl overflow-hidden z-10 shadow-2xl">
                       {suggestions.slice(0, 5).map((s) => (
                         <button key={s.id} onClick={() => choosePlace(s)}
-                          className="w-full text-left px-2.5 py-2 hover:bg-slate-800 border-b border-slate-800/60 last:border-b-0">
-                          <span className="block text-[10.5px] font-bold text-slate-100 truncate">{s.primary}</span>
+                          className="w-full text-left px-2.5 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-b-0">
+                          <span className="block text-[10.5px] font-bold text-slate-900 truncate">{s.primary}</span>
                           <span className="block text-[9px] font-mono text-slate-500 truncate">{s.secondary}</span>
                         </button>
                       ))}
@@ -186,13 +186,13 @@ export function FamilyScreen({
                   )}
                 </div>
                 {picked && (
-                  <p className="text-[9px] font-mono text-emerald-400">
+                  <p className="text-[9px] font-mono text-emerald-600">
                     ✓ {picked.name}{picked.address ? ` · ${picked.address}` : ''}
                   </p>
                 )}
                 <div className="flex gap-2 pt-1">
                   <button onClick={cancelAdd}
-                    className="flex-1 py-2 border border-slate-800 hover:bg-slate-800 text-slate-300 rounded-lg text-[10px] font-bold transition">
+                    className="flex-1 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold transition">
                     Cancel
                   </button>
                   <button onClick={commit} disabled={!name.trim() || !picked || busy}
@@ -217,10 +217,10 @@ export function FamilyScreen({
                   <button
                     key={m.id}
                     onClick={() => onViewOnMap(m)}
-                    className="flex items-center gap-2 bg-slate-950/60 border border-slate-800/60 rounded-xl px-3 py-2 text-left active:scale-[0.98] transition"
+                    className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-left active:scale-[0.98] transition"
                   >
-                    <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                    <span className="text-[10.5px] text-slate-300 font-mono truncate">View {m.name}'s place on map</span>
+                    <MapPin className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span className="text-[10.5px] text-slate-600 font-mono truncate">View {m.name}'s place on map</span>
                   </button>
                 ))}
               </div>

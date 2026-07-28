@@ -9,14 +9,14 @@ interface HazardAdvisoryProps {
 export function HazardAdvisory({ activeHazard, hazardSignal }: HazardAdvisoryProps) {
   return (
     <div className={`border rounded-2xl overflow-hidden shadow-lg animate-in fade-in duration-300 ${
-      activeHazard === 'earthquake' ? 'bg-red-950/20 border-red-500/35 text-red-200' :
-      activeHazard === 'typhoon' ? 'bg-sky-950/20 border-sky-500/35 text-sky-200' :
-      'bg-amber-950/20 border-amber-500/35 text-amber-200'
+      activeHazard === 'earthquake' ? 'bg-red-50 border-red-300 text-red-800' :
+      activeHazard === 'typhoon' ? 'bg-sky-50 border-sky-300 text-sky-800' :
+      'bg-amber-50 border-amber-300 text-amber-800'
     }`}>
       <div className={`px-3 py-2 flex items-center justify-between text-[10.5px] font-bold border-b ${
-        activeHazard === 'earthquake' ? 'bg-red-950/60 border-red-500/20' :
-        activeHazard === 'typhoon' ? 'bg-sky-950/60 border-sky-500/20' :
-        'bg-amber-950/60 border-amber-500/20'
+        activeHazard === 'earthquake' ? 'bg-red-100/70 border-red-300/60' :
+        activeHazard === 'typhoon' ? 'bg-sky-100/70 border-sky-300/60' :
+        'bg-amber-100/70 border-amber-300/60'
       }`}>
         <span className="flex items-center gap-1.5 uppercase font-sans">
           <AlertTriangle className="w-3.5 h-3.5 animate-bounce" />

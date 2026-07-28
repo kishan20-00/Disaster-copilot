@@ -22,13 +22,13 @@ export function BottomNavBar({ activeTab, alertsOpen, onSelectHome, onSelectNavi
   ];
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-16 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800 flex items-stretch justify-around px-1">
+    <div className="absolute bottom-0 left-0 right-0 h-16 z-40 bg-white/95 backdrop-blur border-t border-slate-200 flex items-stretch justify-around px-1">
       {items.map(({ id, label, Icon, active, onClick }) => (
         <button
           key={id}
           onClick={onClick}
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition active:scale-95 ${
-            active ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'
+            active ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
           }`}
         >
           <Icon className="w-5 h-5" style={active ? { fill: 'currentColor', fillOpacity: 0.15 } : undefined} />

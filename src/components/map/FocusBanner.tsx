@@ -20,14 +20,14 @@ export function FocusBanner({ placeName, onReturnToMe }: FocusBannerProps) {
         <span className="block text-[10px] font-black uppercase tracking-wider text-amber-300 leading-none">
           Checking another place
         </span>
-        <span className="block text-[11px] font-bold text-white truncate mt-0.5">{placeName}</span>
+        <span className="block text-[11px] font-bold text-slate-900 truncate mt-0.5">{placeName}</span>
         <span className="block text-[9px] font-mono text-amber-200/70 leading-none mt-0.5">
           Not your location — routes shown are from here
         </span>
       </div>
       <button
         onClick={onReturnToMe}
-        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-950/70 hover:bg-slate-900 border border-amber-500/40 text-amber-200 hover:text-white rounded-xl text-[9.5px] font-black uppercase tracking-wide transition active:scale-95"
+        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 bg-white/70 hover:bg-amber-50 border border-amber-500/40 text-amber-700 hover:text-amber-900 rounded-xl text-[9.5px] font-black uppercase tracking-wide transition active:scale-95"
       >
         <LocateFixed className="w-3 h-3" />
         Back to me

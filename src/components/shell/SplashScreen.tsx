@@ -47,7 +47,7 @@ export function SplashScreen({ onDone }: SplashScreenProps) {
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') skip(); }}
       aria-label="Skip introduction"
-      className={`absolute inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950 cursor-pointer select-none transition-opacity ease-out ${
+      className={`absolute inset-0 z-[60] flex flex-col items-center justify-center bg-white cursor-pointer select-none transition-opacity ease-out ${
         leaving ? 'opacity-0' : 'opacity-100'
       }`}
       style={{ transitionDuration: `${FADE_MS}ms` }}
@@ -85,15 +85,15 @@ export function SplashScreen({ onDone }: SplashScreenProps) {
         )}
 
         <span
-          className={`relative w-[76px] h-[76px] rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center shadow-2xl ${
+          className={`relative w-[76px] h-[76px] rounded-3xl bg-slate-50 border border-slate-200 flex items-center justify-center shadow-2xl ${
             reduced ? '' : 'splash-emblem'
           }`}
         >
-          <Shield className="w-9 h-9 text-indigo-400" />
+          <Shield className="w-9 h-9 text-indigo-500" />
         </span>
       </div>
 
-      <h1 className={`text-xl font-black tracking-tight text-white font-sans uppercase ${reduced ? '' : 'splash-rise'}`}>
+      <h1 className={`text-xl font-black tracking-tight text-slate-900 font-sans uppercase ${reduced ? '' : 'splash-rise'}`}>
         SafeRoute AI
       </h1>
       <span
@@ -103,7 +103,7 @@ export function SplashScreen({ onDone }: SplashScreenProps) {
         安心避難
       </span>
 
-      <div className="w-40 h-[2px] bg-slate-800 rounded-full overflow-hidden mt-7">
+      <div className="w-40 h-[2px] bg-slate-200 rounded-full overflow-hidden mt-7">
         <span
           className="block h-full bg-gradient-to-r from-indigo-500 to-indigo-300 splash-bar"
           style={{ animationDuration: `${duration}ms` }}
@@ -111,7 +111,7 @@ export function SplashScreen({ onDone }: SplashScreenProps) {
       </div>
 
       <span
-        className={`text-[9px] font-mono text-slate-600 tracking-wider uppercase mt-5 ${reduced ? '' : 'splash-rise'}`}
+        className={`text-[9px] font-mono text-slate-400 tracking-wider uppercase mt-5 ${reduced ? '' : 'splash-rise'}`}
         style={reduced ? undefined : { animationDelay: '620ms' }}
       >
         Tap to skip
