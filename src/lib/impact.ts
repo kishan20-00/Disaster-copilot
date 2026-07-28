@@ -100,8 +100,8 @@ const SEVERITY_RANK: Record<Severity, number> = {
   none: 0, minor: 1, moderate: 2, severe: 3, extreme: 4
 };
 
-const fmtKm = (km: number) => (km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`);
-const fmtAge = (min: number) =>
+export const fmtKm = (km: number) => (km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`);
+export const fmtAge = (min: number) =>
   min < 1 ? 'just now' : min < 60 ? `${Math.round(min)} min ago` : `${(min / 60).toFixed(1)} h ago`;
 
 // ── Earthquake ───────────────────────────────────────────────────────────────
