@@ -1,29 +1,15 @@
-import { useEffect, useState } from 'react';
 import {
-  X, LogOut, User, Building2, Users, Accessibility, Languages,
-  Plus, Trash2, MapPin, ShieldQuestion, Shield
+  X, LogOut, User, Building2, Users, Accessibility, Languages
 } from 'lucide-react';
 import type { AuthUser, PersonalContext, Language, Companions } from '@/types/domain';
 import { floorLabel, describeFloor, companionsLabel, TSUNAMI_MIN_SAFE_FLOOR } from '@/lib/profileFormat';
-import type { LatLng } from '@/services/geolocation';
-import type { PlaceSuggestion } from '@/services/placeSearch';
-import { fetchPlaceSuggestions, resolveSuggestion } from '@/services/placeSearch';
-import type { FamilyMember } from '@/lib/familyStore';
-import {
-  addMember, removeMember, describeAge, RELATION_PRESETS
-} from '@/lib/familyStore';
 
 interface ProfileSheetProps {
   show: boolean;
   user: AuthUser | null;
-  authLoading: 'none' | 'google';
-  renderSignInButton: () => void;
   sessionExpiry: number | null;
   personalContext: PersonalContext;
   onChangeContext: (patch: Partial<PersonalContext>) => void;
-  family: FamilyMember[];
-  onChangeFamily: (members: FamilyMember[]) => void;
-  near: LatLng | null;
   onClose: () => void;
   onSignOut: () => void;
 }
@@ -72,68 +58,14 @@ function Choice<T extends string>({
   );
 }
 
-// Profile and settings. Reached by tapping the avatar, which used to sign the
-// user straight out with no confirmation.
-//
-// This is also where floor / companions / mobility finally get a UI. They feed
-// every generated instruction and the emergency message, but until now the only
-// way to change them was to say them out loud to the voice assistant — which is
-// why the SMS said "with child" whether or not anyone had one.
+// Account + personal-context settings. Reached by tapping the avatar. Family
+// management moved to its own tab (see FamilyScreen) — this sheet is what's
+// left: who you are, and the situation that shapes every generated
+// instruction (floor / companions / mobility / language).
 export function ProfileSheet({
-  show, user, authLoading, renderSignInButton, sessionExpiry, personalContext, onChangeContext,
-  family, onChangeFamily, near, onClose, onSignOut
+  show, user, sessionExpiry, personalContext, onChangeContext, onClose, onSignOut
 }: ProfileSheetProps) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const [relation, setRelation] = useState(RELATION_PRESETS[0]);
-  const [placeQuery, setPlaceQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
-  const [picked, setPicked] = useState<{ name: string; address?: string; pos: LatLng } | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  // The GSI button div only exists in the DOM while this sheet is open, so the
-  // button has to be (re)rendered on open rather than relying on useAuth's own
-  // mount-time effect, which ran before this node ever existed.
-  useEffect(() => {
-    if (show && !user) renderSignInButton();
-  }, [show, user, renderSignInButton]);
-
   if (!show) return null;
-
-  const searchPlace = async (q: string) => {
-    setPlaceQuery(q);
-    setPicked(null);
-    if (q.trim().length < 2) {
-      setSuggestions([]);
-      return;
-    }
-    setSuggestions(await fetchPlaceSuggestions(q, near));
-  };
-
-  const choosePlace = async (s: PlaceSuggestion) => {
-    setBusy(true);
-    const resolved = await resolveSuggestion(s);
-    setBusy(false);
-    if (!resolved) return;
-    setPicked({ name: resolved.name, address: resolved.address, pos: resolved.pos });
-    setPlaceQuery(resolved.name);
-    setSuggestions([]);
-  };
-
-  const commit = () => {
-    if (!name.trim() || !picked) return;
-    onChangeFamily(addMember(family, {
-      name,
-      relation,
-      place: { name: picked.name, address: picked.address, lat: picked.pos.lat, lng: picked.pos.lng }
-    }));
-    setName('');
-    setRelation(RELATION_PRESETS[0]);
-    setPlaceQuery('');
-    setPicked(null);
-    setSuggestions([]);
-    setAdding(false);
-  };
 
   const expiryText = sessionExpiry
     ? new Date(sessionExpiry * 1000).toLocaleString()
@@ -267,129 +199,6 @@ export function ProfileSheet({
               hint="Wheelchair selects step-free routing wording." />
             <Choice label="Language" Icon={Languages} value={personalContext.language} options={LANGUAGES}
               onPick={(v) => onChangeContext({ language: v })} />
-          </section>
-
-          {/* ── Family ── */}
-          <section className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3.5 space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <h4 className="text-[10.5px] font-black uppercase tracking-wider text-slate-300">Family places</h4>
-                <p className="text-[9px] font-mono text-slate-500 mt-0.5 leading-snug">
-                  Where you expect people to be. Checked against the hazard when an alert runs.
-                </p>
-              </div>
-              {user && !adding && (
-                <button onClick={() => setAdding(true)}
-                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[9.5px] font-black uppercase tracking-wide transition active:scale-95">
-                  <Plus className="w-3 h-3" /> Add
-                </button>
-              )}
-            </div>
-
-            {/* Stored per Google account (see familyStore.ts), so there is
-                nowhere to save a family place until the user signs in. */}
-            {!user ? (
-              <div className="bg-slate-950 border border-indigo-500/30 rounded-xl p-3.5 flex flex-col items-center text-center gap-2.5">
-                <Shield className="w-6 h-6 text-indigo-400" />
-                <p className="text-[10px] font-mono text-slate-400 leading-snug">
-                  Sign in with Google to save family places and sync them across your devices.
-                </p>
-                <div id="google-signin-button" className="w-full flex justify-center h-11" />
-                {authLoading === 'google' && (
-                  <div className="text-[9.5px] text-indigo-400 font-mono flex items-center gap-1.5 animate-pulse">
-                    <span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                    Securely connecting to Google Identity Services...
-                  </div>
-                )}
-              </div>
-            ) : (
-              <>
-            {/* Honest about what this is and is not */}
-            <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-2">
-              <ShieldQuestion className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-[9px] font-mono text-amber-200/90 leading-snug">
-                These are expected places, not live positions. No Google API lets an app read family
-                locations — Family Link has none and Maps sharing is not published. For live positions,
-                use Google Maps itself.
-              </p>
-            </div>
-
-            {family.length === 0 && !adding && (
-              <p className="text-[10px] font-mono text-slate-500 py-2 text-center">
-                No one added yet.
-              </p>
-            )}
-
-            {family.map((m) => (
-              <div key={m.id} className="flex items-start gap-2.5 bg-slate-950 border border-slate-900 rounded-xl p-2.5">
-                <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <span className="text-[11px] font-bold text-slate-100">{m.name}</span>
-                  <span className="text-[9px] font-mono text-slate-500 ml-1.5">{m.relation}</span>
-                  <p className="text-[9.5px] font-mono text-slate-400 truncate mt-0.5">{m.place.name}</p>
-                  <p className="text-[9px] font-mono text-slate-600">{describeAge(m.addedAt)}</p>
-                </div>
-                <button onClick={() => onChangeFamily(removeMember(family, m.id))}
-                  className="p-1 text-slate-500 hover:text-red-400 transition shrink-0">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-
-            {adding && (
-              <div className="bg-slate-950 border border-indigo-500/30 rounded-xl p-3 space-y-2.5">
-                <input
-                  value={name} onChange={(e) => setName(e.target.value)}
-                  placeholder="Name"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/60"
-                />
-                <div className="flex flex-wrap gap-1.5">
-                  {RELATION_PRESETS.map((r) => (
-                    <button key={r} onClick={() => setRelation(r)}
-                      className={`px-2 py-1 rounded-lg border text-[9.5px] font-bold transition ${
-                        relation === r ? 'bg-indigo-600/25 border-indigo-500/60 text-indigo-100'
-                                       : 'bg-slate-900 border-slate-800 text-slate-400'
-                      }`}>{r}</button>
-                  ))}
-                </div>
-                <div className="relative">
-                  <input
-                    value={placeQuery} onChange={(e) => searchPlace(e.target.value)}
-                    placeholder="Where do you expect them to be?"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/60"
-                  />
-                  {suggestions.length > 0 && (
-                    <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden z-10 shadow-2xl">
-                      {suggestions.slice(0, 5).map((s) => (
-                        <button key={s.id} onClick={() => choosePlace(s)}
-                          className="w-full text-left px-2.5 py-2 hover:bg-slate-800 border-b border-slate-800/60 last:border-b-0">
-                          <span className="block text-[10.5px] font-bold text-slate-100 truncate">{s.primary}</span>
-                          <span className="block text-[9px] font-mono text-slate-500 truncate">{s.secondary}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {picked && (
-                  <p className="text-[9px] font-mono text-emerald-400">
-                    ✓ {picked.name}{picked.address ? ` · ${picked.address}` : ''}
-                  </p>
-                )}
-                <div className="flex gap-2 pt-1">
-                  <button onClick={() => { setAdding(false); setName(''); setPlaceQuery(''); setPicked(null); setSuggestions([]); }}
-                    className="flex-1 py-2 border border-slate-800 hover:bg-slate-800 text-slate-300 rounded-lg text-[10px] font-bold transition">
-                    Cancel
-                  </button>
-                  <button onClick={commit} disabled={!name.trim() || !picked || busy}
-                    className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:pointer-events-none text-white rounded-lg text-[10px] font-bold transition">
-                    {busy ? 'Locating…' : 'Save'}
-                  </button>
-                </div>
-              </div>
-            )}
-              </>
-            )}
-
           </section>
 
           {user && (
