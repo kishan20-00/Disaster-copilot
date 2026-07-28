@@ -164,7 +164,7 @@ export default function App() {
     setMapLayer(LAYER_ORDER[(idx + 1) % LAYER_ORDER.length] as any);
   };
 
-  const { mapRef, recenter, panTo } = useGoogleMaps({
+  const { mapRef, recenter, panTo, refresh } = useGoogleMaps({
     dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition: focusPlace?.pos ?? null, family,
     user, livePosition, liveRoute, liveShelter, googleMapsLoaded,
     setGoogleMapsLoaded, setMapCenter, setActiveMarker
@@ -175,6 +175,18 @@ export default function App() {
     googleMapsLoaded, mapCenter, filterCategory,
     setDynamicMarkers
   });
+
+  // The map div now lives behind every tab (see the render tree below), so it
+  // can be laid out while covered by Home/Family. When Navigate becomes visible
+  // again, poke Google Maps to re-measure and repaint — otherwise it keeps the
+  // stale viewport size it cached while hidden and shows black tiles. Next-frame
+  // so the reveal has actually happened before we measure.
+  useEffect(() => {
+    if (activeTab === 'navigate' && googleMapsLoaded && livePosition) {
+      const id = requestAnimationFrame(() => refresh());
+      return () => cancelAnimationFrame(id);
+    }
+  }, [activeTab, googleMapsLoaded, livePosition, refresh]);
 
   // Agent Pipeline States
   const [agents, setAgents] = useState<AgentState[]>(INITIAL_AGENTS);
@@ -334,7 +346,7 @@ export default function App() {
       <BrandHeader />
 
       {/* iPhone Device Shell Mockup */}
-      <div className="mobile-device-frame bg-slate-950 w-full h-screen sm:h-[844px] sm:w-[390px] flex flex-col justify-between shadow-2xl relative text-white">
+      <div className="mobile-device-frame bg-white w-full h-screen sm:h-[844px] sm:w-[390px] flex flex-col justify-between shadow-2xl relative text-slate-900">
         
         {/* iOS Dynamic Island Area */}
         <DynamicIsland />
@@ -348,7 +360,18 @@ export default function App() {
              LOCATION GATE — the app is fully driven by the user's real GPS
              ========================================== */
           <EnableLocationState mapsReady={googleMapsLoaded} location={location} onRetry={requestLocation} />
-        ) : activeTab === 'home' ? (
+        ) : (
+          <>
+          {/* REAL GOOGLE MAPS DIV — mounted ONCE here, behind every tab, so the
+              map instance is never detached from its container. Home/Family are
+              opaque full-screen panels that cover it; Navigate reveals it. This
+              is what stops the intermittent black map on tab switches. */}
+          <div
+            ref={mapRef}
+            className="absolute inset-0 w-full h-full z-0 overflow-hidden"
+          />
+
+          {activeTab === 'home' ? (
           /* ==========================================
              HOME TAB — status-first landing screen
              ========================================== */
@@ -411,12 +434,6 @@ export default function App() {
               shelterDistance={shelterInfo.distance}
               liveRoute={liveRoute}
               firstStep={getDynamicAdvice()[0]}
-            />
-
-            {/* REAL GOOGLE MAPS DIV */}
-            <div
-              ref={mapRef}
-              className="absolute inset-0 w-full h-full z-0 overflow-hidden"
             />
 
             {showLiveNav && (
@@ -510,24 +527,24 @@ export default function App() {
 
             {/* GOOGLE MAPS EXPANDABLE BOTTOM SHEET DRAWER */}
             <div
-              className={`absolute left-0 right-0 bottom-16 bg-slate-900 border-t border-slate-800 rounded-t-3xl z-40 transition-all duration-300 ease-out shadow-2xl flex flex-col ${
+              className={`absolute left-0 right-0 bottom-16 bg-white border-t border-slate-200 rounded-t-3xl z-40 transition-all duration-300 ease-out shadow-2xl flex flex-col ${
                 isDrawerExpanded ? 'h-[520px]' : 'h-[110px]'
               }`}
             >
               {/* Drawer Top Header - Interactive Drag/Expand Bar */}
-              <div 
+              <div
                 onClick={() => setIsDrawerExpanded(!isDrawerExpanded)}
-                className="w-full py-3 flex flex-col items-center cursor-pointer hover:bg-slate-850/50 rounded-t-3xl transition duration-150 shrink-0"
+                className="w-full py-3 flex flex-col items-center cursor-pointer hover:bg-slate-50 rounded-t-3xl transition duration-150 shrink-0"
               >
                 {/* Visual Drag pill */}
-                <div className="w-10 h-1 bg-slate-700 rounded-full mb-1.5" />
+                <div className="w-10 h-1 bg-slate-300 rounded-full mb-1.5" />
                 
                 {/* Dynamic Status / ETA Display */}
                 <div className="w-full px-5 flex justify-between items-center text-left">
                   <div className="flex gap-2.5 items-center min-w-0">
                     <Compass className={`w-5 h-5 text-indigo-400 shrink-0 ${isSimulating ? 'animate-spin' : ''}`} style={{ animationDuration: '6s' }} />
                     <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-black tracking-tight text-white font-sans uppercase truncate">
+                      <span className="text-xs font-black tracking-tight text-slate-900 font-sans uppercase truncate">
                         {currentStep >= 4
                           ? `${(liveShelter?.name || shelterInfo.name)} Safe Route`
                           : currentStep >= 0
@@ -536,7 +553,7 @@ export default function App() {
                       </span>
                       {/* Always carry something true and useful here: the real walking
                           ETA once routed, otherwise how far the nearest shelter is. */}
-                      <span className="text-[9.5px] text-slate-400 font-mono leading-none mt-0.5 uppercase tracking-wide truncate">
+                      <span className="text-[9.5px] text-slate-500 font-mono leading-none mt-0.5 uppercase tracking-wide truncate">
                         {currentStep >= 4
                           ? (liveRoute ? `${liveRoute.durationText} ETA • ${liveRoute.distanceText} on foot` : 'Calculating safest route…')
                           : shelterInfo.distance !== '—'
@@ -546,7 +563,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-1 text-slate-400 hover:text-white transition shrink-0">
+                  <div className="p-1 text-slate-500 hover:text-slate-900 transition shrink-0">
                     {isDrawerExpanded ? <ChevronDown className="w-4.5 h-4.5" /> : <ChevronUp className="w-4.5 h-4.5" />}
                   </div>
                 </div>
@@ -618,7 +635,7 @@ export default function App() {
                         <button
                           onClick={handleTriggerAlert}
                           disabled={isSimulating}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-300 hover:text-white rounded-xl text-xs font-bold shadow transition active:scale-95 disabled:opacity-45"
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl text-xs font-bold shadow transition active:scale-95 disabled:opacity-45"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
                           Restart
@@ -640,6 +657,8 @@ export default function App() {
             </>
             )}
 
+          </>
+          )}
           </>
         )}
 
