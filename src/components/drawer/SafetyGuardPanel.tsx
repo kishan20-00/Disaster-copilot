@@ -1,4 +1,4 @@
-import { Users, UserPlus, HelpCircle } from 'lucide-react';
+import { Users, UserPlus, HelpCircle, Trash2, ChevronRight } from 'lucide-react';
 import type { FamilyMember } from '@/lib/familyStore';
 import { describeAge } from '@/lib/familyStore';
 import type { FamilyStatus } from '@/lib/familyStatus';
@@ -20,6 +20,14 @@ interface SafetyGuardPanelProps {
    */
   scanStatus: ThreatScanState['status'] | null;
   onOpenProfile: () => void;
+  /** When provided, each row gets a remove button (used by the full Family tab). */
+  onRemove?: (id: string) => void;
+  /**
+   * Collapses to a single tappable summary row instead of the full per-member
+   * list. Used by the map drawer now that the Family tab is the full view —
+   * showing the complete breakdown in both places was the same content twice.
+   */
+  compact?: boolean;
 }
 
 // Family places, checked against the live hazard.
@@ -33,7 +41,7 @@ interface SafetyGuardPanelProps {
 // the user told us about, we can say whether that place falls inside it. That is
 // not "is your child safe" — nothing here can know that — but "is the school you
 // told me about inside the warning area", which is true and useful.
-export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfile }: SafetyGuardPanelProps) {
+export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfile, onRemove, compact }: SafetyGuardPanelProps) {
   const byId = new Map((familyStatus ?? []).map((f) => [f.member.id, f.impact]));
   const assessed = family.map((m) => ({ member: m, impact: byId.get(m.id) ?? null }));
   const inHarm = assessed.filter((a) => a.impact?.affected).length;
@@ -48,6 +56,35 @@ export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfi
         note: 'Hazard feeds could not be reached, so this place could not be judged.' }
     : { label: 'Not checked yet', tone: 'bg-slate-800/60 text-slate-500', dot: 'bg-slate-600',
         note: 'Trigger an alert to check this place against live hazards.' };
+
+  if (compact) {
+    const statusText = family.length === 0
+      ? 'No one added yet'
+      : familyStatus === null
+      ? (scanStatus === 'clear' ? 'No active hazard' : unassessed.label)
+      : inHarm > 0 ? `${inHarm} in affected area` : 'None in affected area';
+    const statusColor = family.length === 0
+      ? 'text-slate-500'
+      : familyStatus === null
+      ? (scanStatus === 'clear' ? 'text-emerald-400' : 'text-slate-500')
+      : inHarm > 0 ? 'text-red-400' : 'text-emerald-400';
+
+    return (
+      <button
+        onClick={onOpenProfile}
+        className="w-full bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3 flex items-center justify-between active:scale-[0.99] transition"
+      >
+        <div className="flex items-center gap-1.5">
+          <Users className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans text-slate-300">Family places</span>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className={`text-[9px] font-mono font-bold uppercase ${statusColor}`}>{statusText}</span>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+        </div>
+      </button>
+    );
+  }
 
   return (
     <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-3.5 space-y-2.5">
@@ -127,6 +164,14 @@ export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfi
                 >
                   {!impact ? unassessed.label : affected ? 'At risk' : 'Clear'}
                 </span>
+                {onRemove && (
+                  <button
+                    onClick={() => onRemove(member.id)}
+                    className="p-1 text-slate-500 hover:text-red-400 transition shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             );
           })}
