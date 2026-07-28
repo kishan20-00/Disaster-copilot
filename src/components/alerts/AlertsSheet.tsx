@@ -1,4 +1,4 @@
-import { X, Radar, WifiOff, AlertTriangle, Footprints, Home, Eye, MapPin, Clock } from 'lucide-react';
+import { Radar, WifiOff, AlertTriangle, Footprints, Home, Eye, MapPin, Clock } from 'lucide-react';
 import type { ThreatScanState, Severity } from '@/lib/impact';
 import { fmtAge, fmtKm } from '@/lib/impact';
 import { hazardInfo } from '@/constants/hazards';
@@ -7,7 +7,6 @@ interface AlertsSheetProps {
   show: boolean;
   threatScan: ThreatScanState | null;
   isSimulating: boolean;
-  onClose: () => void;
   onRescan: () => void;
 }
 
@@ -30,7 +29,7 @@ const RESPONSE_LABEL: Record<string, { text: string; Icon: typeof Footprints }> 
 // field shown is real: severity/distance/age come straight from
 // assessImpact(); there is no confidence score, crowd-validation count, or
 // duration estimate here because this app has no model that produces one.
-export function AlertsSheet({ show, threatScan, isSimulating, onClose, onRescan }: AlertsSheetProps) {
+export function AlertsSheet({ show, threatScan, isSimulating, onRescan }: AlertsSheetProps) {
   if (!show) return null;
 
   const events = threatScan?.verdict?.all ?? [];
@@ -52,24 +51,22 @@ export function AlertsSheet({ show, threatScan, isSimulating, onClose, onRescan 
               <p className="text-[9.5px] text-slate-500 font-mono">Live updates in your area</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            {/* Rescan is a small secondary control, not a full-width bar: on an
-                alerts feed the primary action is reading, not re-scanning. It
-                doubles as the live-state cue — the radar spins while a scan is
-                in flight. */}
-            <button
-              onClick={onRescan}
-              disabled={isSimulating}
-              className="flex items-center gap-1 pl-2 pr-2.5 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-600 disabled:opacity-45 disabled:pointer-events-none transition active:scale-95"
-              title="Rescan hazard feeds"
-            >
-              <Radar className={`w-3.5 h-3.5 ${isSimulating ? 'animate-spin' : ''}`} style={{ animationDuration: '2.5s' }} />
-              <span className="text-[9.5px] font-black uppercase tracking-wide">{isSimulating ? 'Scanning' : 'Rescan'}</span>
-            </button>
-            <button onClick={onClose} className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Rescan is the only header control — there is no close button.
+              Leaving Alerts is done through the bottom nav (tap Home/Navigate/
+              Family), which is why the page stops above the nav rather than
+              covering it. A close "X" here would be a second, competing way to
+              exit that lands on an ambiguous "which tab am I on now?" state. It
+              doubles as the live-state cue — the radar spins while a scan is in
+              flight. */}
+          <button
+            onClick={onRescan}
+            disabled={isSimulating}
+            className="flex items-center gap-1 pl-2 pr-2.5 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-600 disabled:opacity-45 disabled:pointer-events-none transition active:scale-95"
+            title="Rescan hazard feeds"
+          >
+            <Radar className={`w-3.5 h-3.5 ${isSimulating ? 'animate-spin' : ''}`} style={{ animationDuration: '2.5s' }} />
+            <span className="text-[9.5px] font-black uppercase tracking-wide">{isSimulating ? 'Scanning' : 'Rescan'}</span>
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 scrollbar-none">
