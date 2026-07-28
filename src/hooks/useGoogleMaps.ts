@@ -212,16 +212,7 @@ export function useGoogleMaps({
         gestureHandling: "cooperative",
         // Raster maps round zoom to integers by default, which would make the
         // fly-to arc step visibly instead of gliding.
-        isFractionalZoomEnabled: true,
-        styles: [
-          { elementType: "geometry", stylers: [{ color: "#0d1117" }] },
-          { elementType: "labels.text.stroke", stylers: [{ color: "#0d1117" }] },
-          { elementType: "labels.text.fill", stylers: [{ color: "#58a6ff" }] },
-          { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#30363d" }] },
-          { featureType: "road", elementType: "geometry", stylers: [{ color: "#21262d" }] },
-          { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#30363d" }] },
-          { featureType: "water", elementType: "geometry", stylers: [{ color: "#090d16" }] }
-        ]
+        isFractionalZoomEnabled: true
       });
 
       // Unified InfoWindow instance
@@ -305,14 +296,14 @@ export function useGoogleMaps({
 
         if (infoWindowRef.current) {
           const contentString = `
-            <div style="font-family: system-ui, -apple-system, sans-serif; padding: 10px 14px; max-width: 240px; background: #0f172a; color: #f1f5f9; border-radius: 12px; border: 1px solid #1e293b; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+            <div style="font-family: system-ui, -apple-system, sans-serif; padding: 10px 14px; max-width: 240px; background: #ffffff; color: #0f172a; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.15);">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                 <span style="font-size: 15px; display: inline-block;">
                   ${markerData.category === 'shelter' ? '🏥' : markerData.category === 'water' ? '⛲' : markerData.category === 'medical' ? '🩹' : '🚉'}
                 </span>
-                <strong style="font-size: 12.5px; color: #ffffff; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 800;">${markerData.name}</strong>
+                <strong style="font-size: 12.5px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 800;">${markerData.name}</strong>
               </div>
-              <p style="margin: 0; font-size: 10px; color: #94a3b8; line-height: 1.5; font-family: monospace;">${markerData.desc}</p>
+              <p style="margin: 0; font-size: 10px; color: #64748b; line-height: 1.5; font-family: monospace;">${markerData.desc}</p>
             </div>
           `;
           infoWindowRef.current.setContent(contentString);
@@ -485,5 +476,19 @@ export function useGoogleMaps({
     flyTo(pos, 15);
   }, [flyTo]);
 
-  return { mapRef, recenter, panTo };
+  // Force the map to re-measure its container and recentre. The map div is now
+  // mounted once behind every tab (see App.tsx) rather than inside the Navigate
+  // branch, so returning to Navigate can reveal a container that was laid out
+  // while hidden. Google Maps caches the viewport size and paints black tiles
+  // until told the box changed — this nudge (same trigger used at first init)
+  // makes it repaint at the correct size. Idempotent and safe to call anytime.
+  const refresh = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map || typeof google === 'undefined' || !google.maps) return;
+    google.maps.event.trigger(map, 'resize');
+    const center = livePosition ?? publishedCenterRef.current;
+    if (center) map.setCenter(center);
+  }, [livePosition]);
+
+  return { mapRef, recenter, panTo, refresh };
 }
