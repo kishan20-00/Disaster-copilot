@@ -698,19 +698,23 @@ export default function App() {
               show={showAlertsList}
               threatScan={threatScan}
               isSimulating={isSimulating}
-              onClose={() => setShowAlertsList(false)}
               onRescan={handleTriggerAlert}
             />
 
             {/* Suppressed during live navigation — a focused, single-purpose
-                screen per the source design's own "Destination Rule". */}
+                screen per the source design's own "Destination Rule".
+                Alerts has no close button — the bottom nav is its only exit, so
+                every other tab must dismiss the Alerts page as well as switch
+                the underlying tab; otherwise Alerts stays layered on top and
+                tapping Home/Navigate/Family silently changes the tab behind it
+                with no visible effect. */}
             {!showLiveNav && (
               <BottomNavBar
                 activeTab={activeTab}
                 alertsOpen={showAlertsList}
-                onSelectHome={() => setActiveTab('home')}
-                onSelectNavigate={() => setActiveTab('navigate')}
-                onSelectFamily={() => setActiveTab('family')}
+                onSelectHome={() => { setShowAlertsList(false); setActiveTab('home'); }}
+                onSelectNavigate={() => { setShowAlertsList(false); setActiveTab('navigate'); }}
+                onSelectFamily={() => { setShowAlertsList(false); setActiveTab('family'); }}
                 onOpenAlerts={handleOpenAlerts}
               />
             )}
