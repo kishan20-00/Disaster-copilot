@@ -42,6 +42,16 @@ export function formatDistance(m: number): string {
   return `${(m / 1000).toFixed(1)}km`;
 }
 
+/** Initial compass bearing from `from` to `to`, in degrees (0 = north, clockwise). */
+export function bearingDegrees(from: LatLng, to: LatLng): number {
+  const phi1 = toRad(from.lat);
+  const phi2 = toRad(to.lat);
+  const dLambda = toRad(to.lng - from.lng);
+  const y = Math.sin(dLambda) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
 export function findNearestShelter(userPos: LatLng, markers: ShelterCandidate[]): NearestShelter | null {
   const shelters = markers.filter((m) => m.category === 'shelter');
   if (!shelters.length) return null;
