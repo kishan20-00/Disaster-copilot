@@ -21,8 +21,8 @@ export default defineConfig({
         name: 'SafeRoute AI - Disaster Co-pilot',
         short_name: 'SafeRoute AI',
         description: 'Personal multilingual disaster co-pilot with human-in-the-loop safety.',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        theme_color: '#f8fafc',
+        background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'portrait',
         icons: [
