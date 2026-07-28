@@ -41,6 +41,11 @@ import type { FamilyStatus } from '@/lib/familyStatus';
 import { sessionExpiry } from '@/lib/session';
 import { ThreatScanPanel } from '@/components/drawer/ThreatScanPanel';
 import type { ThreatScanState } from '@/lib/impact';
+import { HomeScreen } from '@/components/home/HomeScreen';
+import { BottomNavBar } from '@/components/shell/BottomNavBar';
+import { LiveNavigationView, LAYER_ORDER } from '@/components/map/LiveNavigationView';
+import { AlertsSheet } from '@/components/alerts/AlertsSheet';
+import { FamilyScreen } from '@/components/family/FamilyScreen';
 import type { LatLng } from './services/geolocation';
 import type { WalkingRoute } from './services/maps';
 import {
@@ -87,6 +92,7 @@ export default function App() {
   const [focusPlace, setFocusPlace] = useState<{ pos: LatLng; name: string; address: string } | null>(null);
   const [overrideNotice, setOverrideNotice] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAlertsList, setShowAlertsList] = useState(false);
   // Read once, at mount: the intro plays on a device's first visit and not again.
   const [showSplash, setShowSplash] = useState(() => !hasSeenSplash());
   // Family places the user recorded. Loaded per account, not globally — see the
@@ -99,6 +105,13 @@ export default function App() {
   const [voiceAssistant, setVoiceAssistant] = useState(false);
   const [cameraMode, setCameraMode] = useState(false);
   const cameraRef = useARCamera(cameraMode, setCameraMode);
+  // Home, Navigate, and Family are real tabs. Alerts instead opens a sheet
+  // layered on top of whichever tab is underneath — see BottomNavBar.
+  const [activeTab, setActiveTab] = useState<'home' | 'navigate' | 'family'>('home');
+  // Tapping Back/Search in the live-navigation view peeks at the browsing map
+  // without ending the route; a fresh trigger or reroute always returns to the
+  // navigation view (see handleTriggerAlert/handleStandDown resetting this).
+  const [peekingBrowse, setPeekingBrowse] = useState(false);
 
   // Dynamic Google Places API States & Refs
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
@@ -140,6 +153,16 @@ export default function App() {
 
   // Only draw an evacuation line when leaving is actually the advice.
   const routingEnabled = currentStep >= 0 && responseMode(activeHazard) === 'evacuate';
+
+  // The Navigate tab's in-progress state: a real route is ready to walk. Not a
+  // separate flag — derived from the same pipeline state everything else reads,
+  // so it can never drift out of sync with what the drawer/AR view show.
+  const showLiveNav = activeTab === 'navigate' && routingEnabled && currentStep >= 4 && !!liveRoute && !peekingBrowse;
+
+  const handleCycleLayer = () => {
+    const idx = LAYER_ORDER.indexOf(mapLayer);
+    setMapLayer(LAYER_ORDER[(idx + 1) % LAYER_ORDER.length] as any);
+  };
 
   const { mapRef, recenter, panTo } = useGoogleMaps({
     dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition: focusPlace?.pos ?? null, family,
@@ -215,6 +238,7 @@ export default function App() {
     setIsDrawerExpanded(true);
     setCurrentStep(0);
     setIsSimulating(true);
+    setPeekingBrowse(false);
     navigator.vibrate?.([300, 100, 300]);
   };
 
@@ -236,6 +260,7 @@ export default function App() {
     setFamilyStatus(null);
     setIsSimulating(false);
     setCurrentStep(-1);
+    setPeekingBrowse(false);
   };
 
 
@@ -281,6 +306,28 @@ export default function App() {
     setPersonalContext, onTrigger: handleTriggerAlert, onApproveSms: handleApproveSms
   });
 
+  const handleToggleVoice = () => {
+    if (voiceAssistant) window.speechSynthesis?.cancel();
+    setVoiceAssistant(!voiceAssistant);
+  };
+
+  // Alerts opens a sheet listing every event the last scan found (not just the
+  // one hazard the pipeline is acting on) — see AlertsSheet.
+  const handleOpenAlerts = () => setShowAlertsList(true);
+
+  // Reuses the same "examine a place that isn't you" mechanism search results
+  // already use, rather than inventing a second way to point the map at a
+  // place — a family member's expected place is just another focusable spot.
+  const handleViewFamilyOnMap = (member: FamilyMember) => {
+    setFocusPlace({
+      pos: { lat: member.place.lat, lng: member.place.lng },
+      name: member.name,
+      address: member.place.address ?? member.place.name
+    });
+    setOverrideNotice(null);
+    setActiveTab('navigate');
+  };
+
   return (
     <div className="min-h-screen mobile-device-wrapper flex flex-col items-center justify-center p-0 sm:p-6 select-none">
       {/* Brand Header (Desktop Only) */}
@@ -301,9 +348,57 @@ export default function App() {
              LOCATION GATE — the app is fully driven by the user's real GPS
              ========================================== */
           <EnableLocationState mapsReady={googleMapsLoaded} location={location} onRetry={requestLocation} />
+        ) : activeTab === 'home' ? (
+          /* ==========================================
+             HOME TAB — status-first landing screen
+             ========================================== */
+          <HomeScreen
+            user={user}
+            onOpenProfile={() => setShowProfile(true)}
+            hazardSignal={hazardSignal}
+            threatScan={threatScan}
+            activeHazard={activeHazard}
+            currentStep={currentStep}
+            isSimulating={isSimulating}
+            agents={agents}
+            livePosition={livePosition}
+            dynamicMarkers={dynamicMarkers}
+            liveRoute={liveRoute}
+            family={family}
+            familyStatus={familyStatus}
+            locationCoarse={location.coarse}
+            googleMapsLoaded={googleMapsLoaded}
+            voiceAssistant={voiceAssistant}
+            isListening={isListening}
+            heardText={heardText}
+            sttFeedback={sttFeedback}
+            firstStep={getDynamicAdvice()[0]}
+            onToggleSpeech={toggleSpeechRecognition}
+            onToggleVoice={handleToggleVoice}
+            onTriggerAlert={handleTriggerAlert}
+            onNavigateToMap={() => setActiveTab('navigate')}
+            onSelectCategory={(id) => setFilterCategory(id as any)}
+            onOpenFamily={() => setActiveTab('family')}
+            onOpenAlerts={handleOpenAlerts}
+          />
+        ) : activeTab === 'family' ? (
+          /* ==========================================
+             FAMILY TAB — expected places + real hazard status
+             ========================================== */
+          <FamilyScreen
+            user={user}
+            authLoading={authLoading}
+            renderSignInButton={renderSignInButton}
+            family={family}
+            familyStatus={familyStatus}
+            scanStatus={threatScan?.status ?? null}
+            near={focusPos}
+            onChangeFamily={updateFamily}
+            onViewOnMap={handleViewFamilyOnMap}
+          />
         ) : (
           /* ==========================================
-             MAIN PREMIUM GOOGLE MAPS DISASTER CO-PILOT DASHBOARD
+             NAVIGATE TAB — live map dashboard
              ========================================== */
           <>
             {/* AR LIVE CAMERA FEED + OVERLAY */}
@@ -324,7 +419,31 @@ export default function App() {
               className="absolute inset-0 w-full h-full z-0 overflow-hidden"
             />
 
-            {/* FLOATING TOP GOOGLE MAPS SEARCH BAR */}
+            {showLiveNav && (
+              <LiveNavigationView
+                activeHazard={activeHazard}
+                threatScan={threatScan}
+                liveRoute={liveRoute}
+                liveShelter={liveShelter}
+                livePosition={livePosition}
+                isSimulating={isSimulating}
+                isListening={isListening}
+                heardText={heardText}
+                mapLayer={mapLayer}
+                onCycleLayer={handleCycleLayer}
+                cameraMode={cameraMode}
+                onToggleCamera={() => setCameraMode(!cameraMode)}
+                onTriggerAlert={handleTriggerAlert}
+                onExitToBrowse={() => setPeekingBrowse(true)}
+                onEndNavigation={handleStandDown}
+              />
+            )}
+
+            {/* FLOATING TOP GOOGLE MAPS SEARCH BAR — hidden during live navigation
+                (see LiveNavigationView) to keep that screen a focused, single-purpose
+                view rather than layering both UIs at once. */}
+            {!showLiveNav && (
+            <>
             <div className="absolute top-12 left-4 right-4 z-30 flex flex-col gap-2.5">
               <MapSearchBar
                 searchQuery={searchQuery}
@@ -373,10 +492,7 @@ export default function App() {
               onSelectLayer={(id) => setMapLayer(id as any)}
               onRecenter={() => { recenter(); setActiveMarker(null); }}
               voiceAssistant={voiceAssistant}
-              onToggleVoice={() => {
-                if (voiceAssistant) window.speechSynthesis?.cancel();
-                setVoiceAssistant(!voiceAssistant);
-              }}
+              onToggleVoice={handleToggleVoice}
               cameraMode={cameraMode}
               onToggleCamera={() => setCameraMode(!cameraMode)}
               onTriggerAlert={handleTriggerAlert}
@@ -393,8 +509,8 @@ export default function App() {
             />
 
             {/* GOOGLE MAPS EXPANDABLE BOTTOM SHEET DRAWER */}
-            <div 
-              className={`absolute left-0 right-0 bottom-0 bg-slate-900 border-t border-slate-800 rounded-t-3xl z-40 transition-all duration-300 ease-out shadow-2xl flex flex-col ${
+            <div
+              className={`absolute left-0 right-0 bottom-16 bg-slate-900 border-t border-slate-800 rounded-t-3xl z-40 transition-all duration-300 ease-out shadow-2xl flex flex-col ${
                 isDrawerExpanded ? 'h-[520px]' : 'h-[110px]'
               }`}
             >
@@ -466,12 +582,13 @@ export default function App() {
                     focusName={focusPlace?.name ?? null}
                   />
 
-                  {/* SAFETY GUARD DASHBOARD — All Family Secure */}
+                  {/* SAFETY GUARD SUMMARY — full breakdown lives in the Family tab now */}
                   <SafetyGuardPanel
                     family={family}
                     familyStatus={familyStatus}
                     scanStatus={threatScan?.status ?? null}
-                    onOpenProfile={() => setShowProfile(true)}
+                    onOpenProfile={() => setActiveTab('family')}
+                    compact
                   />
 
                   {/* ACTIVE LIVE HAZARD ADVISORY */}
@@ -520,18 +637,23 @@ export default function App() {
                 </div>
               )}
             </div>
+            </>
+            )}
 
+          </>
+        )}
+
+        {/* Profile/Family sheet, the SMS gate, and the tab bar sit above both
+            tabs — Family/SMS approval and tab switching must work from Home
+            just as they do from Navigate. */}
+        {googleMapsLoaded && livePosition && (
+          <>
             <ProfileSheet
               show={showProfile}
               user={user}
-              authLoading={authLoading}
-              renderSignInButton={renderSignInButton}
               sessionExpiry={sessionExpiry()}
               personalContext={personalContext}
               onChangeContext={updateContext}
-              family={family}
-              onChangeFamily={updateFamily}
-              near={focusPos}
               onClose={() => setShowProfile(false)}
               onSignOut={() => { setShowProfile(false); handleSignOut(); }}
             />
@@ -545,6 +667,27 @@ export default function App() {
               onClose={() => setShowSmsModal(false)}
               onApprove={handleApproveSms}
             />
+
+            <AlertsSheet
+              show={showAlertsList}
+              threatScan={threatScan}
+              isSimulating={isSimulating}
+              onClose={() => setShowAlertsList(false)}
+              onRescan={handleTriggerAlert}
+            />
+
+            {/* Suppressed during live navigation — a focused, single-purpose
+                screen per the source design's own "Destination Rule". */}
+            {!showLiveNav && (
+              <BottomNavBar
+                activeTab={activeTab}
+                alertsOpen={showAlertsList}
+                onSelectHome={() => setActiveTab('home')}
+                onSelectNavigate={() => setActiveTab('navigate')}
+                onSelectFamily={() => setActiveTab('family')}
+                onOpenAlerts={handleOpenAlerts}
+              />
+            )}
           </>
         )}
 
