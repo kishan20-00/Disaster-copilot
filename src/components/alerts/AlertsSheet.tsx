@@ -36,11 +36,17 @@ export function AlertsSheet({ show, threatScan, isSimulating, onClose, onRescan 
   const events = threatScan?.verdict?.all ?? [];
 
   return (
-    <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-50 flex flex-col justify-end animate-in fade-in duration-200">
-      <div className="bg-white border-t border-slate-200 rounded-t-3xl max-h-[85%] flex flex-col animate-in slide-in-from-bottom duration-300">
+    // A full page, not a drawer: it fills the frame down to exactly where the
+    // bottom nav begins (bottom-16 = the nav's h-16), so the nav stays visible
+    // and shows "Alerts" as the active tab. No dark scrim — this is a peer of
+    // the Home/Family tab panels (opaque bg-white), layered above the current
+    // tab. z-40 matches the Navigate drawer so an underlying drawer can't poke
+    // through, but the nav (also z-40, rendered AFTER this in App.tsx) still
+    // wins its own strip by DOM order and remains tappable.
+    <div className="absolute top-0 left-0 right-0 bottom-16 z-40 bg-white flex flex-col animate-in fade-in duration-200">
         <div className="shrink-0 px-5 pt-4 pb-3 flex items-center justify-between border-b border-slate-200">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4.5 h-4.5 text-amber-500" />
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
             <div>
               <h3 className="text-sm font-black text-slate-900 leading-tight">Live Alerts</h3>
               <p className="text-[9.5px] text-slate-500 font-mono">Live updates in your area</p>
@@ -137,7 +143,6 @@ export function AlertsSheet({ show, threatScan, isSimulating, onClose, onRescan 
             })
           )}
         </div>
-      </div>
     </div>
   );
 }
