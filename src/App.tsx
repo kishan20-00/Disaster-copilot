@@ -323,9 +323,16 @@ export default function App() {
     setVoiceAssistant(!voiceAssistant);
   };
 
-  // Alerts opens a sheet listing every event the last scan found (not just the
-  // one hazard the pipeline is acting on) — see AlertsSheet.
-  const handleOpenAlerts = () => setShowAlertsList(true);
+  // Alerts opens a full page listing every event the last scan found (not just
+  // the one hazard the pipeline is acting on) — see AlertsSheet. Opening the tab
+  // auto-starts a fresh scan so the feed is live on arrival, but never restarts
+  // one already in flight (guarding on isSimulating) — otherwise re-tapping the
+  // tab mid-scan would reset the pipeline under itself. An explicit Rescan lives
+  // in the page header for manual refreshes.
+  const handleOpenAlerts = () => {
+    setShowAlertsList(true);
+    if (!isSimulating) handleTriggerAlert();
+  };
 
   // Reuses the same "examine a place that isn't you" mechanism search results
   // already use, rather than inventing a second way to point the map at a
