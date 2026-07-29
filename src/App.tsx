@@ -80,7 +80,7 @@ export default function App() {
   const [isSimulating, setIsSimulating] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
   const [showSmsModal, setShowSmsModal] = useState(false);
-  const [smsStatus, setSmsStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [smsStatus, setSmsStatus] = useState<'idle' | 'copied'>('idle');
 
   // Google Maps styles and interactive state
   const [mapLayer, setMapLayer] = useState<'streets' | 'satellite' | 'terrain' | 'traffic' | 'hazard'>('streets');
@@ -277,15 +277,24 @@ export default function App() {
 
 
 
-  const handleApproveSms = () => {
-    setSmsStatus('sending');
-    setTimeout(() => {
-      setSmsStatus('sent');
-      navigator.vibrate?.([600]);
+  // This app has no SMS transport, so it never claims to "send". Instead it
+  // copies the drafted message to the clipboard — a real action we can honestly
+  // confirm — for the user to paste into their own Messages app. The "copied"
+  // state is only set on the clipboard write actually succeeding.
+  const handleApproveSms = async () => {
+    const text = getDraftedSmsText();
+    try {
+      await navigator.clipboard.writeText(text);
+      setSmsStatus('copied');
+      navigator.vibrate?.([120]);
       setTimeout(() => {
         setShowSmsModal(false);
-      }, 2000);
-    }, 1500);
+        setSmsStatus('idle');
+      }, 2200);
+    } catch {
+      // Clipboard blocked (no permission / insecure context): leave the draft
+      // on screen so the user can select and copy it by hand. Never fake success.
+    }
   };
 
   // Get the drafted message text. Prefers live Gemini draft when available.
