@@ -165,7 +165,7 @@ export default function App() {
   };
 
   const { mapRef, recenter, panTo, refresh } = useGoogleMaps({
-    dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition: focusPlace?.pos ?? null, family,
+    dynamicMarkers, activeMarker, mapLayer, currentStep, routingEnabled, focusPosition: focusPlace?.pos ?? null, family,
     user, livePosition, liveRoute, liveShelter, googleMapsLoaded,
     setGoogleMapsLoaded, setMapCenter, setActiveMarker
   });

@@ -3,6 +3,8 @@ import type { LatLng } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
 import { haversineMeters } from '@/services/maps';
 import type { FamilyMember } from '@/lib/familyStore';
+import type { MarkerIcon, MarkerState } from '@/lib/markerIcons';
+import { poiMarkerIcon, userDotIcon } from '@/lib/markerIcons';
 
 declare const google: any;
 
@@ -12,8 +14,16 @@ const M_PER_PX_Z0 = 156543.03392;
 const easeInOutCubic = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
+// Stacking order for the POI pins: what you tapped sits above where you are
+// being sent, which sits above the shelters, which sit above everything else.
+// Without this the crowd overlaps by latitude and buries whichever pin matters.
+const zIndexFor = (category: string, state: MarkerState): number =>
+  state === 'active' ? 40 : state === 'target' ? 30 : category === 'shelter' ? 12 : 10;
+
 export interface UseGoogleMapsParams {
   dynamicMarkers: any[];
+  /** Id of the tapped POI, so its pin can be lifted out of the crowd. */
+  activeMarker: string | null;
   mapLayer: string;
   currentStep: number;
   /** False for shelter-in-place hazards — no line should invite going outside. */
@@ -35,7 +45,7 @@ export interface UseGoogleMapsParams {
 // Loads the Google Maps script and manages the live map instance: markers
 // (POIs + user + family), route polyline, traffic/type layers, and centering.
 export function useGoogleMaps({
-  dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition, family, user,
+  dynamicMarkers, activeMarker, mapLayer, currentStep, routingEnabled, focusPosition, family, user,
   livePosition, liveRoute, liveShelter, googleMapsLoaded,
   setGoogleMapsLoaded, setMapCenter, setActiveMarker
 }: UseGoogleMapsParams) {
@@ -50,6 +60,12 @@ export function useGoogleMaps({
   const isAnimatingRef = useRef(false);
   const publishedCenterRef = useRef<LatLng | null>(null);
   const fittedRouteKeyRef = useRef<string | null>(null);
+  // POI pins by id, so selection can restyle a single pin. Re-creating the
+  // markers instead would detach the InfoWindow from the pin it is anchored to
+  // and the popup would blink out on the very tap that opened it.
+  const poiMarkersRef = useRef<Map<string, { marker: any; category: string; isTarget: boolean; state: MarkerState }>>(new Map());
+  const activeMarkerRef = useRef<string | null>(null);
+  const userMarkerRef = useRef<any>(null);
 
   // Publish a settled map centre upward (drives the nearby-Places search).
   // Deduped, because every publish costs a Places round-trip per category.
@@ -67,6 +83,29 @@ export function useGoogleMaps({
     }
     isAnimatingRef.current = false;
   }, []);
+
+  // Marker artwork is authored as plain numbers in lib/markerIcons so it stays
+  // testable without the Maps SDK; this is the only place it meets google.maps.
+  const toGoogleIcon = useCallback((icon: MarkerIcon) => ({
+    url: icon.url,
+    scaledSize: new google.maps.Size(icon.width, icon.height),
+    anchor: new google.maps.Point(icon.anchorX, icon.anchorY)
+  }), []);
+
+  // Re-skin the POI pins for the current selection, touching only the two that
+  // actually changed. The pins keep their identity, so an open InfoWindow stays
+  // anchored where it is.
+  const paintPoiIcons = useCallback(() => {
+    poiMarkersRef.current.forEach((entry, id) => {
+      const state: MarkerState =
+        id === activeMarkerRef.current ? 'active' : entry.isTarget ? 'target' : 'default';
+      if (state === entry.state) return;
+      entry.state = state;
+      entry.marker.setIcon(toGoogleIcon(poiMarkerIcon(entry.category, state)));
+      // Selection floats above the target pulse, which floats above the crowd.
+      entry.marker.setZIndex(zIndexFor(entry.category, state));
+    });
+  }, [toGoogleIcon]);
 
   // Smoothly fly the camera to a target instead of teleporting.
   //
@@ -261,35 +300,39 @@ export function useGoogleMaps({
     // 2. Clear existing Google Map markers
     googleMarkersRef.current.forEach(m => m.setMap(null));
     googleMarkersRef.current = [];
+    poiMarkersRef.current.clear();
 
     // 3. Create current category & search-filtered markers (real Google Places)
     const markersToDraw = dynamicMarkers;
 
     markersToDraw.forEach((markerData: any) => {
-      const color = {
-        shelter: '#10b981',
-        water: '#0ea5e9',
-        medical: '#a855f7',
-        station: '#f59e0b'
-      }[markerData.category as 'shelter' | 'water' | 'medical' | 'station'] || '#38bdf8';
-
-      // SVG path custom pin symbol for Google Maps
-      const pinSymbol = {
-        path: 'M 0 8 C -5 2, -7.5 -3, -7.5 -9 C -7.5 -16, -4 -20, 0 -20 C 4 -20, 7.5 -16, 7.5 -9 C 7.5 -3, 5 2, 0 8 Z',
-        fillColor: color,
-        fillOpacity: 1,
-        strokeColor: '#0d1117',
-        strokeWeight: 1.5,
-        scale: 1.2,
-        anchor: new google.maps.Point(0, 8),
-      };
+      // The shelter the route is heading for, matched by position: the chosen
+      // shelter can come from the official GSI register, which carries its own
+      // ids, so the same site would never match this list by id.
+      const isTarget =
+        !!liveShelter &&
+        Number.isFinite(markerData.lat) &&
+        Number.isFinite(markerData.lng) &&
+        haversineMeters(
+          { lat: markerData.lat, lng: markerData.lng },
+          { lat: liveShelter.lat, lng: liveShelter.lng }
+        ) < 30;
+      const state: MarkerState = isTarget ? 'target' : 'default';
 
       const marker = new google.maps.Marker({
         position: { lat: markerData.lat, lng: markerData.lng },
         map: mapInstanceRef.current,
-        icon: pinSymbol,
-        title: markerData.name
+        icon: toGoogleIcon(poiMarkerIcon(markerData.category, state)),
+        title: markerData.name,
+        zIndex: zIndexFor(markerData.category, state),
+        // Optimised markers are painted onto one shared canvas, which flattens
+        // the pulse on the target pin and softens the artwork on retina. A few
+        // dozen DOM pins is a price worth paying; the icons themselves are
+        // deduplicated by the browser since each state has one fixed data URI.
+        optimized: false
       });
+
+      poiMarkersRef.current.set(markerData.id, { marker, category: markerData.category, isTarget, state });
 
       marker.addListener('click', () => {
         setActiveMarker(markerData.id);
@@ -314,23 +357,31 @@ export function useGoogleMaps({
       googleMarkersRef.current.push(marker);
     });
 
-    // 4. Place current user position pin (Blue pulsing core dot)
+    // A Places refetch fires on every pan, so the pins are rebuilt constantly.
+    // Re-apply the selection afterwards or the highlight would silently drop
+    // off the pin whose popup is still open.
+    paintPoiIcons();
+
+    // 4. Current user position (blue core, white ring, slow sonar pulse).
+    // Moved rather than rebuilt, and kept out of googleMarkersRef, because the
+    // block above wipes that list on every Places refetch — i.e. on every pan —
+    // and a recreated marker would restart the pulse each time.
     const userPos = livePosition;
     if (userPos) {
-      const userMarker = new google.maps.Marker({
-        position: userPos,
-        map: mapInstanceRef.current,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 6,
-          fillColor: '#2563eb',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 1.5
-        },
-        title: "Your Position"
-      });
-      googleMarkersRef.current.push(userMarker);
+      if (!userMarkerRef.current) {
+        userMarkerRef.current = new google.maps.Marker({
+          map: mapInstanceRef.current,
+          icon: toGoogleIcon(userDotIcon()),
+          title: "Your Position",
+          // Whatever else is on the map, "you" stays on top.
+          zIndex: 60,
+          optimized: false
+        });
+      }
+      userMarkerRef.current.setPosition(userPos);
+      userMarkerRef.current.setMap(mapInstanceRef.current);
+    } else if (userMarkerRef.current) {
+      userMarkerRef.current.setMap(null);
     }
 
     // 4a. The place being examined, if it is not where the user is standing.
@@ -461,7 +512,15 @@ export function useGoogleMaps({
       fittedRouteKeyRef.current = null;
     }
 
-  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition, family, user, livePosition, liveRoute, liveShelter, publishCenter, cancelAnimation, setActiveMarker]);
+  }, [googleMapsLoaded, dynamicMarkers, mapLayer, currentStep, routingEnabled, focusPosition, family, user, livePosition, liveRoute, liveShelter, publishCenter, cancelAnimation, setActiveMarker, toGoogleIcon, paintPoiIcons]);
+
+  // Selection restyles pins in place. Deliberately kept out of the effect above:
+  // that one rebuilds every marker, and rebuilding the pin an InfoWindow is
+  // anchored to closes the popup the tap just opened.
+  useEffect(() => {
+    activeMarkerRef.current = activeMarker;
+    paintPoiIcons();
+  }, [activeMarker, paintPoiIcons]);
 
   // Recenter the map on the user's live GPS position (used by the recenter
   // button). An explicit flight — bypasses the one-shot gpsCenteredRef so it
