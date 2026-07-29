@@ -184,10 +184,10 @@ export function useVoiceAssistant(params: UseVoiceAssistantParams) {
     } else if (lower.includes('send') || lower.includes('approve') || lower.includes('sms') || lower.includes('message') || lower.includes('发送') || lower.includes('送信') || lower.includes('gửi')) {
       if (currentStep >= 4 && smsStatus === 'idle') {
         onApproveSms();
-        feedback = 'Emergency SMS approved and sent!';
+        feedback = 'Emergency message copied — paste it into your SMS app to send.';
         updated = true;
       } else {
-        feedback = 'SMS can only be sent when the simulation is finished.';
+        feedback = 'The message can only be copied once the safety check is finished.';
       }
     }
 
