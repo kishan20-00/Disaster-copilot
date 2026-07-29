@@ -5,7 +5,7 @@ export type Labels = {
   approving: string;
   instructions: string;
   familyMsg: string;
-  sent: string;
+  copied: string;
   analyzing: string;
 };
 
@@ -16,7 +16,7 @@ export const LANGUAGES_MAP = {
     approving: "Human-in-the-Loop Gate",
     instructions: "DO THIS NOW",
     familyMsg: "Draft Emergency Message",
-    sent: "Emergency SMS Dispatched!",
+    copied: "Message copied — paste into your SMS app",
     analyzing: "Co-pilot reasoning in progress..."
   },
   Chinese: {
@@ -25,7 +25,7 @@ export const LANGUAGES_MAP = {
     approving: "人工审批网关",
     instructions: "立即执行以下操作",
     familyMsg: "紧急求助短信草稿",
-    sent: "紧急求助短信已发送！",
+    copied: "消息已复制 — 请粘贴到短信应用发送",
     analyzing: "副驾驶智能推理中..."
   },
   Vietnamese: {
@@ -34,7 +34,7 @@ export const LANGUAGES_MAP = {
     approving: "Cổng Phê Duyệt Nhân Sự",
     instructions: "HÀNH ĐỘNG NGAY",
     familyMsg: "Bản Nháp Tin Nhắn Khẩn Cấp",
-    sent: "Tin nhắn khẩn cấp đã được gửi!",
+    copied: "Đã sao chép — dán vào ứng dụng SMS để gửi",
     analyzing: "Trợ lý ảo đang phân tích tình huống..."
   },
   Japanese: {
@@ -43,7 +43,7 @@ export const LANGUAGES_MAP = {
     approving: "ヒューマン・ゲートウェイ",
     instructions: "今すぐ実行すべき行動",
     familyMsg: "緊急連絡メッセージ案",
-    sent: "緊急メッセージを送信しました！",
+    copied: "メッセージをコピーしました — SMSアプリに貼り付けて送信",
     analyzing: "コパイロットが推論しています..."
   }
 };
