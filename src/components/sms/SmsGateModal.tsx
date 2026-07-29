@@ -1,15 +1,17 @@
-import { Shield, X, MessageSquare, Users, MapPin, Send, Check } from 'lucide-react';
+import { Shield, X, MessageSquare, MapPin, Copy, Check } from 'lucide-react';
 
 interface SmsGateModalProps {
   show: boolean;
-  labels: { approving: string; sent: string };
-  smsStatus: 'idle' | 'sending' | 'sent';
+  labels: { approving: string; copied: string };
+  smsStatus: 'idle' | 'copied';
   draftText: string;
   onClose: () => void;
   onApprove: () => void;
 }
 
-// Human-in-the-loop approval gate for the emergency SMS draft.
+// Human-in-the-loop gate for the emergency message draft. This app has no SMS
+// transport of its own, so it never claims to send: it prepares the message and
+// copies it for the user to send from their own Messages app.
 export function SmsGateModal({ show, labels, smsStatus, draftText, onClose, onApprove }: SmsGateModalProps) {
   if (!show) return null;
   return (
@@ -45,18 +47,20 @@ export function SmsGateModal({ show, labels, smsStatus, draftText, onClose, onAp
           <div className="flex justify-between items-center border-b border-slate-200 pb-2 mb-3">
             <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono">
               <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
-              <span>TO: Emergency Contacts</span>
+              <span>Emergency message</span>
             </div>
-            <span className="text-[10px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 px-1.5 py-0.5 rounded font-mono font-extrabold">SMS DRAFT</span>
+            <span className="text-[10px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 px-1.5 py-0.5 rounded font-mono font-extrabold">DRAFT</span>
           </div>
 
           <p className="text-xs text-slate-800 font-mono leading-relaxed bg-indigo-50 border border-indigo-200 p-3 rounded-xl select-text">
             {draftText}
           </p>
 
+          {/* Only a real, verifiable fact about the draft: it carries a live GPS
+              link when a position is known. No recipient is shown because the
+              app has no contacts — the user picks who to send it to. */}
           <div className="mt-3 flex gap-2 text-[10px] text-slate-500">
-            <span className="flex items-center gap-1 font-mono"><Users className="w-3 h-3 text-indigo-500" /> Yen (Spouse)</span>
-            <span className="flex items-center gap-1 font-mono"><MapPin className="w-3 h-3 text-indigo-500" /> Smart Live GPS Attached</span>
+            <span className="flex items-center gap-1 font-mono"><MapPin className="w-3 h-3 text-indigo-500" /> Live GPS link included</span>
           </div>
         </div>
 
@@ -73,25 +77,17 @@ export function SmsGateModal({ show, labels, smsStatus, draftText, onClose, onAp
               onClick={onApprove}
               className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-xl text-xs active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/15"
             >
-              <Send className="w-3.5 h-3.5" /> Approve & Send
+              <Copy className="w-3.5 h-3.5" /> Copy Message
             </button>
           </div>
         )}
 
-        {smsStatus === 'sending' && (
-          <div className="py-4 flex flex-col items-center justify-center">
-            <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin mb-2" />
-            <span className="text-xs text-slate-600 font-bold tracking-tight">Encrypting & transmitting satellite SMS...</span>
-          </div>
-        )}
-
-        {smsStatus === 'sent' && (
+        {smsStatus === 'copied' && (
           <div className="py-4 flex flex-col items-center justify-center animate-in zoom-in-95 duration-300">
             <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 rounded-full flex items-center justify-center mb-2 shadow-lg">
               <Check className="w-6 h-6 stroke-[3]" />
             </div>
-            <span className="text-xs text-emerald-600 font-bold tracking-tight mb-0.5">{labels.sent}</span>
-            <span className="text-[10px] text-slate-500 font-mono">Message delivered to 1 contact</span>
+            <span className="text-xs text-emerald-600 font-bold tracking-tight text-center px-4">{labels.copied}</span>
           </div>
         )}
 
