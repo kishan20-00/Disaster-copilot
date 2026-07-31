@@ -56,6 +56,14 @@ export interface FamilyMember {
   /** Free text: "Child", "Partner", "Father" — the user's own words. */
   relation: string;
   place: FamilyPlace;
+  /**
+   * Optional phone number, typed by the user. The one piece of contact data this
+   * app can genuinely act on: a `tel:` link reaches the real dialler, which is
+   * more use in an emergency than any status readout we could invent. Optional
+   * on purpose — older saved members predate the field, and a member without a
+   * number is still perfectly valid.
+   */
+  phone?: string;
   /** When the user recorded this, so staleness can be stated honestly. */
   addedAt: string;
 }
@@ -96,10 +104,11 @@ function newId(): string {
 
 export function addMember(
   members: FamilyMember[],
-  input: { name: string; relation: string; place: FamilyPlace }
+  input: { name: string; relation: string; place: FamilyPlace; phone?: string }
 ): FamilyMember[] {
   const name = input.name.trim();
   if (!name) return members;
+  const phone = input.phone?.trim();
   return [
     ...members,
     {
@@ -107,6 +116,9 @@ export function addMember(
       name,
       relation: input.relation.trim() || 'Family',
       place: input.place,
+      // Stored only when actually given, so `phone` stays absent rather than ''
+      // and the Call button can test for it with a simple truthiness check.
+      ...(phone ? { phone } : {}),
       addedAt: new Date().toISOString()
     }
   ];
