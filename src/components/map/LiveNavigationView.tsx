@@ -55,7 +55,7 @@ export function LiveNavigationView({
   return (
     <div className="absolute inset-0 z-40 flex flex-col pointer-events-none">
       {/* Top bar */}
-      <div className="pt-12 px-4 flex items-center justify-between pointer-events-auto">
+      <div className="pt-[max(3rem,var(--safe-top))] px-4 flex items-center justify-between pointer-events-auto">
         <div className="flex items-center gap-2">
           <button
             onClick={onExitToBrowse}
@@ -120,7 +120,7 @@ export function LiveNavigationView({
       </div>
 
       {/* Right-side FABs */}
-      <div className="absolute right-4 bottom-64 flex flex-col gap-3 pointer-events-auto">
+      <div className="absolute right-4 bottom-[calc(16rem+var(--safe-bottom))] flex flex-col gap-3 pointer-events-auto">
         <button
           onClick={onCycleLayer}
           className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg border transition active:scale-95 ${
@@ -160,8 +160,10 @@ export function LiveNavigationView({
         </div>
       )}
 
-      {/* Bottom sheet */}
-      <div className="bg-white border-t border-slate-200 rounded-t-[32px] px-4 pt-3 pb-6 pointer-events-auto relative overflow-hidden">
+      {/* Bottom sheet. The tab bar is suppressed on this screen, so this runs to
+          the very bottom edge and has to clear the home indicator itself — End
+          and Reroute are the two buttons you least want half-covered. */}
+      <div className="bg-white border-t border-slate-200 rounded-t-[32px] px-4 pt-3 pb-[calc(1.5rem+var(--safe-bottom))] pointer-events-auto relative overflow-hidden">
         <div className="absolute top-0 left-0 h-1 bg-slate-200 w-full">
           <div className="h-full bg-indigo-500 transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
         </div>

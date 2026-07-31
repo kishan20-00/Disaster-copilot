@@ -101,7 +101,7 @@ export function ProfileSheet({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 pb-6 space-y-5 scrollbar-none">
+        <div className="flex-1 overflow-y-auto px-5 pb-[calc(1.5rem+var(--safe-bottom))] space-y-5 scrollbar-none">
           {/* ── What actually shapes the advice ── */}
           <section className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-3.5">
             <div>

@@ -16,7 +16,7 @@ export function SmsGateModal({ show, labels, smsStatus, draftText, onClose, onAp
   if (!show) return null;
   return (
     <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-50 flex flex-col justify-end animate-in fade-in duration-300">
-      <div className="bg-white border-t border-slate-200 rounded-t-3xl p-5 space-y-4 animate-in slide-in-from-bottom duration-300">
+      <div className="bg-white border-t border-slate-200 rounded-t-3xl p-5 pb-[calc(1.25rem+var(--safe-bottom))] space-y-4 animate-in slide-in-from-bottom duration-300">
 
         {/* Modal Drag Handle */}
         <div className="flex justify-center -mt-2.5 mb-2">
