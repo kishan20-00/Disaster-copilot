@@ -51,9 +51,64 @@ body {
   animation: shimmer 1.5s infinite linear;
 }
 
+/* ── App shell sizing ───────────────────────────────────────────────────────
+ *
+ * The frame has to be exactly as tall as the viewport you can actually SEE.
+ * `100vh` on a phone is the *large* viewport — it counts the strip the browser's
+ * URL bar is sitting in as if it were free — so a 100vh frame hangs below the
+ * fold and the bottom nav can only be reached by scrolling the page. `100dvh` is
+ * the viewport as it currently stands. The `vh` line above it is the fallback
+ * for browsers with no `dvh` support, where the old behaviour is still better
+ * than a collapsed frame.
+ *
+ * Scoped below the `sm` breakpoint on purpose: from 640px up the frame is a
+ * fixed 390×844 desktop mockup, and an unscoped rule here would outrank
+ * `sm:h-[844px]` on source order alone and stretch the mockup to the window.
+ */
+@media (max-width: 639px) {
+  .app-viewport {
+    height: 100vh;
+    height: 100dvh;
+  }
+}
+
+/*
+ * Safe-area insets. Both are 0 in a browser tab, and real numbers in a
+ * standalone PWA — index.html sets `viewport-fit=cover`, and the README tells
+ * people to add the app to their home screen, so that is a first-class case.
+ * There the status bar and the home indicator sit ON TOP of the frame.
+ *
+ * `--nav-h` is the single source of truth for the bottom strip: the 4rem of
+ * controls plus whatever the home indicator covers. Anything that stops short of
+ * the nav (the Navigate drawer, the Alerts page) measures from this, or it
+ * overlaps the moment the inset stops being zero.
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --nav-h: calc(4rem + var(--safe-bottom));
+}
+
 /* Simulated mobile device frame container (for desktop viewports) */
 .mobile-device-wrapper {
   background: radial-gradient(circle at top, #f1f5f9, #e2e8f0);
+}
+
+/* The frame is the whole viewport on a phone, and every panel inside it scrolls
+   itself, so nothing outside it should scroll. Without this, rubber-banding the
+   page drags the entire app shell — bottom nav included — off screen. */
+@media (max-width: 639px) {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior-y: none;
+  }
+}
+
+.mobile-device-frame {
+  /* A panel taller than the frame must be clipped, not turned into page scroll. */
+  overflow: hidden;
 }
 
 @media (min-width: 640px) {
@@ -64,7 +119,6 @@ body {
     border: 12px solid #334155;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 2px #475569;
     position: relative;
-    overflow: hidden;
   }
 }
 

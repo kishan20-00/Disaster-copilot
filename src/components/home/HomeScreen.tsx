@@ -76,9 +76,11 @@ export function HomeScreen({
 
   return (
     <div className="absolute inset-0">
-    <div className="absolute inset-0 overflow-y-auto pb-20 scrollbar-none bg-white">
+    {/* Bottom padding clears the nav (--nav-h) with a rem to spare, so the last
+        card is never left tucked underneath it. */}
+    <div className="absolute inset-0 overflow-y-auto pb-[calc(var(--nav-h)+1rem)] scrollbar-none bg-white">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200 px-4 pt-[max(0.75rem,var(--safe-top))] pb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield className="w-5 h-5 text-indigo-500" />
           <span className="text-sm font-black text-slate-900 tracking-tight">SafeRoute AI</span>
@@ -336,7 +338,7 @@ export function HomeScreen({
         stays pinned to the phone frame instead of scrolling with the content. */}
     <button
       onClick={onToggleVoice}
-      className={`absolute bottom-24 right-4 w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center active:scale-95 transition z-30 border ${
+      className={`absolute bottom-[calc(var(--nav-h)+2rem)] right-4 w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center active:scale-95 transition z-30 border ${
         voiceAssistant
           ? 'bg-emerald-600 border-emerald-400 text-white animate-pulse'
           : 'bg-indigo-600 border-indigo-400 text-white'

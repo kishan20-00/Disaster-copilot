@@ -32,18 +32,35 @@ const RESPONSE_LABEL: Record<string, { text: string; Icon: typeof Footprints }> 
 export function AlertsSheet({ show, threatScan, isSimulating, onRescan }: AlertsSheetProps) {
   if (!show) return null;
 
-  const events = threatScan?.verdict?.all ?? [];
+  // Newest first, so the page reads as a timeline.
+  //
+  // This is a display-only copy, and deliberately NOT a change to
+  // evaluateThreats' own ordering. That sort is triage, not presentation:
+  // `verdict.worst` is the first *affected* entry in it, and both
+  // ThreatScanPanel and the pipeline's all-clear message read `all[0]` as "the
+  // closest event". Re-sorting the shared array would quietly change which
+  // hazard the app evacuates you for.
+  //
+  // Anything actually reaching the user is pinned above the timeline — the card
+  // marked "Acting on this" is the whole point of the page, and a purely
+  // chronological order could bury it under forty distant events.
+  const recency = (e: { impact: { ageMinutes: number } }) =>
+    Number.isFinite(e.impact.ageMinutes) ? e.impact.ageMinutes : Number.MAX_SAFE_INTEGER;
+  const events = [...(threatScan?.verdict?.all ?? [])].sort((a, b) => {
+    if (a.impact.affected !== b.impact.affected) return a.impact.affected ? -1 : 1;
+    return recency(a) - recency(b);
+  });
 
   return (
     // A full page, not a drawer: it fills the frame down to exactly where the
-    // bottom nav begins (bottom-16 = the nav's h-16), so the nav stays visible
-    // and shows "Alerts" as the active tab. No dark scrim — this is a peer of
-    // the Home/Family tab panels (opaque bg-white), layered above the current
-    // tab. z-40 matches the Navigate drawer so an underlying drawer can't poke
+    // bottom nav begins (--nav-h is the nav's own height, see index.css), so the
+    // nav stays visible and shows "Alerts" as the active tab. No dark scrim —
+    // this is a peer of the Home/Family tab panels (opaque bg-white), layered
+    // above the current tab. z-40 matches the Navigate drawer so it can't poke
     // through, but the nav (also z-40, rendered AFTER this in App.tsx) still
     // wins its own strip by DOM order and remains tappable.
-    <div className="absolute top-0 left-0 right-0 bottom-16 z-40 bg-white flex flex-col animate-in fade-in duration-200">
-        <div className="shrink-0 px-5 pt-4 pb-3 flex items-center justify-between border-b border-slate-200">
+    <div className="absolute top-0 left-0 right-0 bottom-[var(--nav-h)] z-40 bg-white flex flex-col animate-in fade-in duration-200">
+        <div className="shrink-0 px-5 pt-[max(1rem,var(--safe-top))] pb-3 flex items-center justify-between border-b border-slate-200">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-500" />
             <div>

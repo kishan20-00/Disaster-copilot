@@ -97,8 +97,8 @@ export function FamilyScreen({
   };
 
   return (
-    <div className="absolute inset-0 overflow-y-auto pb-20 scrollbar-none bg-white">
-      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+    <div className="absolute inset-0 overflow-y-auto pb-[calc(var(--nav-h)+1rem)] scrollbar-none bg-white">
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200 px-4 pt-[max(0.75rem,var(--safe-top))] pb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield className="w-5 h-5 text-indigo-500" />
           <span className="text-sm font-black text-slate-900 tracking-tight">Family</span>

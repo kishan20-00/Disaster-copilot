@@ -22,7 +22,11 @@ export function BottomNavBar({ activeTab, alertsOpen, onSelectHome, onSelectNavi
   ];
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-16 z-40 bg-white/95 backdrop-blur border-t border-slate-200 flex items-stretch justify-around px-1">
+    /* Height comes from --nav-h (4rem of controls + the home-indicator inset,
+       see index.css) and the same inset is added as padding, so the buttons
+       stay above the indicator in a standalone PWA instead of underneath it.
+       Everything that stops short of the nav measures from --nav-h too. */
+    <div className="absolute bottom-0 left-0 right-0 h-[var(--nav-h)] pb-[var(--safe-bottom)] z-40 bg-white/95 backdrop-blur border-t border-slate-200 flex items-stretch justify-around px-1">
       {items.map(({ id, label, Icon, active, onClick }) => (
         <button
           key={id}

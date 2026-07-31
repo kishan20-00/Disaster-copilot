@@ -357,12 +357,16 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen mobile-device-wrapper flex flex-col items-center justify-center p-0 sm:p-6 select-none">
+    <div className="min-h-dvh mobile-device-wrapper flex flex-col items-center justify-center p-0 sm:p-6 select-none">
       {/* Brand Header (Desktop Only) */}
       <BrandHeader />
 
-      {/* iPhone Device Shell Mockup */}
-      <div className="mobile-device-frame bg-white w-full h-screen sm:h-[844px] sm:w-[390px] flex flex-col justify-between shadow-2xl relative text-slate-900">
+      {/* iPhone Device Shell Mockup. On a phone the frame IS the viewport, sized
+          in dvh (see .app-viewport in index.css) so it ends where the screen
+          ends — the bottom nav used to sit below the fold behind the browser's
+          URL bar, reachable only by scrolling. On desktop it goes back to being
+          a fixed 390×844 mockup. */}
+      <div className="mobile-device-frame bg-white w-full app-viewport sm:h-[844px] sm:w-[390px] flex flex-col justify-between shadow-2xl relative text-slate-900">
         
         {/* iOS Dynamic Island Area */}
         <DynamicIsland />
@@ -477,7 +481,10 @@ export default function App() {
                 view rather than layering both UIs at once. */}
             {!showLiveNav && (
             <>
-            <div className="absolute top-12 left-4 right-4 z-30 flex flex-col gap-2.5">
+            {/* max() keeps the tuned 3rem offset in a browser tab (where the
+                inset is 0) and only grows it when the status bar / Dynamic
+                Island is genuinely overlapping the frame. */}
+            <div className="absolute top-[max(3rem,var(--safe-top))] left-4 right-4 z-30 flex flex-col gap-2.5">
               <MapSearchBar
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
@@ -542,9 +549,14 @@ export default function App() {
             />
 
             {/* GOOGLE MAPS EXPANDABLE BOTTOM SHEET DRAWER */}
+            {/* Expanded height is capped against the frame, not a flat 520px:
+                on a short viewport 520px + the nav is taller than the screen, so
+                the top of the drawer — the handle you tap to close it again —
+                was pushed off screen. The content area scrolls, so losing a few
+                pixels of height costs nothing. */}
             <div
-              className={`absolute left-0 right-0 bottom-16 bg-white border-t border-slate-200 rounded-t-3xl z-40 transition-all duration-300 ease-out shadow-2xl flex flex-col ${
-                isDrawerExpanded ? 'h-[520px]' : 'h-[110px]'
+              className={`absolute left-0 right-0 bottom-[var(--nav-h)] bg-white border-t border-slate-200 rounded-t-3xl z-40 transition-all duration-300 ease-out shadow-2xl flex flex-col ${
+                isDrawerExpanded ? 'h-[min(520px,calc(100%-7rem))]' : 'h-[110px]'
               }`}
             >
               {/* Drawer Top Header - Interactive Drag/Expand Bar */}
