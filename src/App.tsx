@@ -435,9 +435,13 @@ export default function App() {
             family={family}
             familyStatus={familyStatus}
             scanStatus={threatScan?.status ?? null}
+            scannedAt={threatScan?.scannedAt ?? null}
             near={focusPos}
+            livePosition={livePosition}
             onChangeFamily={updateFamily}
             onViewOnMap={handleViewFamilyOnMap}
+            onOpenSms={() => setShowSmsModal(true)}
+            onOpenMap={() => setActiveTab('navigate')}
           />
         ) : (
           /* ==========================================
@@ -633,7 +637,6 @@ export default function App() {
                     familyStatus={familyStatus}
                     scanStatus={threatScan?.status ?? null}
                     onOpenProfile={() => setActiveTab('family')}
-                    compact
                   />
 
                   {/* ACTIVE LIVE HAZARD ADVISORY */}

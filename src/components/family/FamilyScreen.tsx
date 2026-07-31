@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Shield, Plus, MapPin, UserPlus } from 'lucide-react';
+import { Shield, Plus, UserPlus, Map as MapIcon, HelpCircle } from 'lucide-react';
 import type { AuthUser } from '@/types/domain';
 import type { FamilyMember } from '@/lib/familyStore';
 import { addMember, RELATION_PRESETS } from '@/lib/familyStore';
@@ -8,7 +8,8 @@ import type { ThreatScanState } from '@/lib/impact';
 import type { LatLng } from '@/services/geolocation';
 import type { PlaceSuggestion } from '@/services/placeSearch';
 import { fetchPlaceSuggestions, resolveSuggestion } from '@/services/placeSearch';
-import { SafetyGuardPanel } from '@/components/drawer/SafetyGuardPanel';
+import { FamilyMemberCard } from '@/components/family/FamilyMemberCard';
+import { FamilyStatusHero } from '@/components/family/FamilyStatusHero';
 
 interface FamilyScreenProps {
   user: AuthUser | null;
@@ -17,23 +18,35 @@ interface FamilyScreenProps {
   family: FamilyMember[];
   familyStatus: FamilyStatus[] | null;
   scanStatus: ThreatScanState['status'] | null;
+  /** When the last scan finished, for the hero's "as of" line. */
+  scannedAt: string | null;
+  /** Biases place autocomplete toward wherever the map is pointed. */
   near: LatLng | null;
+  /** The device's own position, for each card's "from you" distance. */
+  livePosition: LatLng | null;
   onChangeFamily: (members: FamilyMember[]) => void;
   onViewOnMap: (member: FamilyMember) => void;
+  /** Opens the existing human-approval message gate. */
+  onOpenSms: () => void;
+  /** Switches to the Navigate tab, where the live map already lives. */
+  onOpenMap: () => void;
 }
 
-// The Family tab: promoted from a sheet buried in Profile to its own full
-// screen, since checking on family is core to what this app does, not a
-// settings sub-page. Every status shown here is the same real computation
-// SafetyGuardPanel already does (place vs. hazard footprint) — this screen
-// does NOT show live position, battery, signal, or movement speed. Those were
-// in an earlier version of this exact feature and were deliberately removed
-// (see familyStore.ts): no Google API exposes a family member's live position,
-// so those fields were invented. What IS real: an expected place, and whether
-// that place falls inside a detected hazard.
+// The Family tab: a status hero, then one card per person, then a way onto the
+// map. Laid out to the supplied "Family Dashboard" design; the per-card
+// reasoning about what may and may not be displayed is in FamilyMemberCard, and
+// the wording of each state is shared with the map drawer through
+// familyVerdict so the two surfaces cannot drift.
+//
+// This screen still does NOT show live position, battery, signal or movement
+// speed, however prominently a design asks for them. Those were in an earlier
+// version of this exact feature and were deliberately removed (see
+// familyStore.ts): no Google API exposes a family member's live position, so
+// every one of those fields was invented. What IS real: an expected place, and
+// whether that place falls inside a detected hazard.
 export function FamilyScreen({
   user, authLoading, renderSignInButton, family, familyStatus, scanStatus,
-  near, onChangeFamily, onViewOnMap
+  scannedAt, near, livePosition, onChangeFamily, onViewOnMap, onOpenSms, onOpenMap
 }: FamilyScreenProps) {
   const [adding, setAdding] = useState(false);
   // Shown once, right after sign-in, while family is still empty. Skippable —
@@ -41,6 +54,7 @@ export function FamilyScreen({
   const [onboardingSkipped, setOnboardingSkipped] = useState(false);
   const [name, setName] = useState('');
   const [relation, setRelation] = useState(RELATION_PRESETS[0]);
+  const [phone, setPhone] = useState('');
   const [placeQuery, setPlaceQuery] = useState('');
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [picked, setPicked] = useState<{ name: string; address?: string; pos: LatLng } | null>(null);
@@ -78,10 +92,12 @@ export function FamilyScreen({
     onChangeFamily(addMember(family, {
       name,
       relation,
+      phone,
       place: { name: picked.name, address: picked.address, lat: picked.pos.lat, lng: picked.pos.lng }
     }));
     setName('');
     setRelation(RELATION_PRESETS[0]);
+    setPhone('');
     setPlaceQuery('');
     setPicked(null);
     setSuggestions([]);
@@ -91,10 +107,13 @@ export function FamilyScreen({
   const cancelAdd = () => {
     setAdding(false);
     setName('');
+    setPhone('');
     setPlaceQuery('');
     setPicked(null);
     setSuggestions([]);
   };
+
+  const byId = new Map((familyStatus ?? []).map((f) => [f.member.id, f.impact]));
 
   return (
     <div className="absolute inset-0 overflow-y-auto pb-[calc(var(--nav-h)+1rem)] scrollbar-none bg-white">
@@ -102,6 +121,11 @@ export function FamilyScreen({
         <div className="flex items-center gap-2">
           <Shield className="w-5 h-5 text-indigo-500" />
           <span className="text-sm font-black text-slate-900 tracking-tight">Family</span>
+          {family.length > 0 && (
+            <span className="text-[9px] font-mono text-slate-400 tabular-nums">
+              {family.length} {family.length === 1 ? 'place' : 'places'}
+            </span>
+          )}
         </div>
         {user && !adding && (
           <button
@@ -167,6 +191,15 @@ export function FamilyScreen({
                       }`}>{r}</button>
                   ))}
                 </div>
+                {/* Optional, and the only contact detail stored. It powers the
+                    Call button on the card — a real dialler handoff, which is
+                    worth more in an emergency than any status readout. */}
+                <input
+                  value={phone} onChange={(e) => setPhone(e.target.value)}
+                  inputMode="tel" autoComplete="tel"
+                  placeholder="Phone number (optional)"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500/60"
+                />
                 <div className="relative">
                   <input
                     value={placeQuery} onChange={(e) => searchPlace(e.target.value)}
@@ -203,27 +236,72 @@ export function FamilyScreen({
               </div>
             )}
 
-            <SafetyGuardPanel
-              family={family}
+            <FamilyStatusHero
+              memberCount={family.length}
               familyStatus={familyStatus}
               scanStatus={scanStatus}
-              onOpenProfile={() => setAdding(true)}
-              onRemove={(id) => onChangeFamily(family.filter((m) => m.id !== id))}
+              scannedAt={scannedAt}
             />
 
-            {family.length > 0 && (
-              <div className="flex flex-col gap-2">
-                {family.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => onViewOnMap(m)}
-                    className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-left active:scale-[0.98] transition"
-                  >
-                    <MapPin className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                    <span className="text-[10.5px] text-slate-600 font-mono truncate">View {m.name}'s place on map</span>
-                  </button>
-                ))}
+            {family.length === 0 ? (
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl py-6 px-4 text-center space-y-3">
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Add the people you would check on, and where you expect them to be. Their places
+                  get tested against any hazard that reaches you.
+                </p>
+                <button
+                  onClick={() => setAdding(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-[11px] font-bold transition active:scale-95"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Add family
+                </button>
               </div>
+            ) : (
+              <>
+                <div className="flex flex-col gap-3">
+                  {family.map((m) => (
+                    <FamilyMemberCard
+                      key={m.id}
+                      member={m}
+                      impact={byId.get(m.id) ?? null}
+                      scanStatus={scanStatus}
+                      livePosition={livePosition}
+                      onViewOnMap={() => onViewOnMap(m)}
+                      onOpenSms={onOpenSms}
+                      onRemove={() => onChangeFamily(family.filter((x) => x.id !== m.id))}
+                    />
+                  ))}
+                </div>
+
+                {/* Map strip. The design shows a small static preview; this app
+                    already owns one live Google Map behind every tab, so rather
+                    than mount a second instance this hands over to the tab where
+                    that map — with every family pin already on it — is visible. */}
+                <button
+                  onClick={onOpenMap}
+                  className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-2xl px-4 py-3 flex items-center gap-3 text-left active:scale-[0.99] transition"
+                >
+                  <span className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center shrink-0">
+                    <MapIcon className="w-4 h-4 text-indigo-600" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11.5px] font-black text-slate-900 tracking-tight">
+                      See every place on the map
+                    </span>
+                    <span className="block text-[9.5px] font-mono text-slate-500 truncate">
+                      {family.length} {family.length === 1 ? 'pin' : 'pins'} · plus shelters and your own position
+                    </span>
+                  </span>
+                </button>
+
+                {/* A green edge must never be read as "this person is fine". */}
+                <p className="flex items-start gap-1.5 text-[9.5px] font-mono text-slate-400 leading-snug px-0.5">
+                  <HelpCircle className="w-3 h-3 shrink-0 mt-0.5" />
+                  This checks places, not people. It cannot tell you whether someone is actually
+                  there, or safe. Live location, battery and movement are not available to this app.
+                </p>
+              </>
             )}
           </>
         )}
