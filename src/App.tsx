@@ -347,13 +347,24 @@ export default function App() {
   // already use, rather than inventing a second way to point the map at a
   // place — a family member's expected place is just another focusable spot.
   const handleViewFamilyOnMap = (member: FamilyMember) => {
+    const pos = { lat: member.place.lat, lng: member.place.lng };
     setFocusPlace({
-      pos: { lat: member.place.lat, lng: member.place.lng },
+      pos,
       name: member.name,
       address: member.place.address ?? member.place.name
     });
     setOverrideNotice(null);
+    setActiveMarker(null);
+    // With a route in progress the Navigate tab is the full-screen turn-by-turn
+    // view, which has no family pin on it — so this landed the user in their own
+    // navigation instead of at the place they asked for. Peek at the browsing
+    // map instead of standing the alert down: looking up where your family is
+    // must not cancel an active evacuation.
+    setPeekingBrowse(true);
     setActiveTab('navigate');
+    // Switching tabs alone never moved the camera, so the map stayed wherever it
+    // already was — on the user's own position.
+    panTo(pos);
   };
 
   return (
