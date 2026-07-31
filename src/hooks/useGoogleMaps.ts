@@ -541,11 +541,19 @@ export function useGoogleMaps({
   // while hidden. Google Maps caches the viewport size and paints black tiles
   // until told the box changed — this nudge (same trigger used at first init)
   // makes it repaint at the correct size. Idempotent and safe to call anytime.
+  //
+  // It restores whatever the camera was ALREADY looking at, not the device's own
+  // position: a resize can nudge the centre, but forcing livePosition here made
+  // every reveal of the Navigate tab yank the map back home — which is what
+  // stopped "show place" on a family member from ever landing on their place.
   const refresh = useCallback(() => {
     const map = mapInstanceRef.current;
     if (!map || typeof google === 'undefined' || !google.maps) return;
+    const current = map.getCenter?.();
+    const center = current
+      ? { lat: current.lat(), lng: current.lng() }
+      : publishedCenterRef.current ?? livePosition;
     google.maps.event.trigger(map, 'resize');
-    const center = livePosition ?? publishedCenterRef.current;
     if (center) map.setCenter(center);
   }, [livePosition]);
 
