@@ -103,26 +103,20 @@ export function HomeScreen({
           <Shield className="w-5 h-5 text-indigo-500 shrink-0" />
           <span className="text-sm font-black text-slate-900 tracking-tight truncate">SafeRoute AI</span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Language chip — one tap cycles language, visible at a glance for
-              foreign residents/tourists rather than buried in Settings. The
-              label is centered in a fixed-width box so wide native scripts
-              (日本語/中文) don't shove the SOS button off the row. */}
+              foreign residents/tourists rather than buried in Settings. Takes
+              the header slot the redundant SOS button used to hold (SOS is
+              still reachable via the body "Run Safety Check" action and the
+              in-navigation SOS), so nothing has to compete for width. */}
           <button
             onClick={cycleLanguage}
-            className="h-8 pl-2 pr-2.5 rounded-full bg-slate-100 border border-slate-200 flex items-center gap-1 shrink-0 active:scale-95 transition"
+            className="h-8 pl-2.5 pr-3 rounded-full bg-indigo-50 border border-indigo-200 flex items-center gap-1.5 shrink-0 active:scale-95 transition"
             title={t('profile.language')}
             aria-label={`Language: ${language}. Tap to change.`}
           >
-            <Languages className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-            <span className="text-[10.5px] font-black text-slate-600 leading-none min-w-[1.6rem] text-center">{LANG_SHORT[language]}</span>
-          </button>
-          <button
-            onClick={onTriggerAlert}
-            disabled={isSimulating}
-            className="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full text-[10.5px] font-black uppercase tracking-wide shadow-lg active:scale-95 disabled:opacity-45 disabled:pointer-events-none transition"
-          >
-            SOS
+            <Languages className="w-4 h-4 text-indigo-500 shrink-0" />
+            <span className="text-[11px] font-black text-indigo-600 leading-none">{LANG_SHORT[language]}</span>
           </button>
           {/* Only settings entry point reachable from Home — previously this
               (floor/mobility/language, sign-out) was only reachable from a
