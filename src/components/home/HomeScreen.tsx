@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import {
   Shield, AlertTriangle, ChevronDown, ChevronUp, Wifi, Map as MapIcon, Radar,
-  ShieldCheck, Sparkles, Home as HomeIcon, Timer, Play, Compass, Users, Stethoscope, Mic, User
+  ShieldCheck, Sparkles, Home as HomeIcon, Timer, Play, Compass, Users, Stethoscope, Mic, User, Languages
 } from 'lucide-react';
-import type { AgentState, ActionStep, AuthUser, Hazard, HazardSignal } from '@/types/domain';
+import type { AgentState, ActionStep, AuthUser, Hazard, HazardSignal, Language } from '@/types/domain';
 import type { ThreatScanState } from '@/lib/impact';
 import type { FamilyMember } from '@/lib/familyStore';
 import type { FamilyStatus } from '@/lib/familyStatus';
@@ -37,6 +37,8 @@ interface HomeScreenProps {
   heardText: string;
   sttFeedback: string;
   firstStep: ActionStep | undefined;
+  language: Language;
+  onChangeLanguage: (lang: Language) => void;
   onToggleSpeech: () => void;
   onToggleVoice: () => void;
   onTriggerAlert: () => void;
@@ -56,12 +58,25 @@ export function HomeScreen({
   hazardSignal, threatScan, activeHazard, currentStep, isSimulating, agents,
   livePosition, dynamicMarkers, liveRoute, family, familyStatus,
   locationCoarse, googleMapsLoaded, voiceAssistant, isListening, heardText, sttFeedback,
-  firstStep, onToggleSpeech, onToggleVoice, onTriggerAlert, onNavigateToMap,
+  firstStep, language, onChangeLanguage, onToggleSpeech, onToggleVoice, onTriggerAlert, onNavigateToMap,
   onSelectCategory, onOpenFamily, onOpenAlerts
 }: HomeScreenProps) {
   const t = useT();
   const [showStatus, setShowStatus] = useState(false);
   const [showAgents, setShowAgents] = useState(false);
+
+  // Canonical order mirrors ProfileSheet's LANGUAGES; tapping the header chip
+  // cycles to the next one. Writes the same personalContext.language that
+  // Settings and voice control use, so UI labels (via useT), agent output, and
+  // TTS/STT locale all follow.
+  const LANG_ORDER: Language[] = ['English', 'Japanese', 'Chinese', 'Vietnamese'];
+  const LANG_SHORT: Record<Language, string> = {
+    English: 'EN', Japanese: '日本語', Chinese: '中文', Vietnamese: 'VI'
+  };
+  const cycleLanguage = () => {
+    const idx = LANG_ORDER.indexOf(language);
+    onChangeLanguage(LANG_ORDER[(idx + 1) % LANG_ORDER.length]);
+  };
 
   const shelter = getShelterInfo(livePosition, dynamicMarkers);
   const worst = threatScan?.status === 'threat' ? threatScan.verdict?.worst ?? null : null;
@@ -89,6 +104,17 @@ export function HomeScreen({
           <span className="text-sm font-black text-slate-900 tracking-tight">SafeRoute AI</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Language chip — one tap cycles language, visible at a glance for
+              foreign residents/tourists rather than buried in Settings. */}
+          <button
+            onClick={cycleLanguage}
+            className="h-8 px-2.5 rounded-full bg-slate-100 border border-slate-200 flex items-center gap-1 text-[10.5px] font-black text-slate-600 active:scale-95 transition"
+            title={t('profile.language')}
+            aria-label={`Language: ${language}. Tap to change.`}
+          >
+            <Languages className="w-3.5 h-3.5 text-indigo-500" />
+            {LANG_SHORT[language]}
+          </button>
           <button
             onClick={onTriggerAlert}
             disabled={isSimulating}
@@ -155,7 +181,10 @@ export function HomeScreen({
             <Radar className="w-10 h-10 text-indigo-500 animate-spin" style={{ animationDuration: '2.5s' }} />
             <h2 className="text-xl font-black text-slate-900">{t('home.analyzing')}</h2>
             <p className="text-[11px] text-slate-500 font-mono">
-              {agents[currentStep]?.name ?? t('home.runningPipeline')}
+              {/* Agents fan out, so more than one can run at once — name whoever
+                  is actually working rather than a single currentStep index. */}
+              {agents.filter((a) => a.status === 'running').map((a) => a.name).join(', ')
+                || t('home.runningPipeline')}
             </p>
           </section>
         ) : currentStep < 0 && !threatScan ? (

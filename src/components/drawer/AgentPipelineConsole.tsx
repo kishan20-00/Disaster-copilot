@@ -4,10 +4,12 @@ import { useT } from '@/i18n/context';
 
 interface AgentPipelineConsoleProps {
   agents: AgentState[];
+  /** Retained for caller compatibility; row highlighting now keys off each
+      agent's live status since the pipeline fans out (multiple can run). */
   currentStep: number;
 }
 
-export function AgentPipelineConsole({ agents, currentStep }: AgentPipelineConsoleProps) {
+export function AgentPipelineConsole({ agents }: AgentPipelineConsoleProps) {
   const t = useT();
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5">
@@ -16,8 +18,11 @@ export function AgentPipelineConsole({ agents, currentStep }: AgentPipelineConso
         {t('agents.title')}
       </h3>
       <div className="space-y-2">
-        {agents.map((agent: any, i: number) => {
-          const isActive = currentStep === i;
+        {agents.map((agent: any) => {
+          // Highlight the row(s) actually working. The pipeline fans out — three
+          // agents can be 'running' at once — so this keys off live status rather
+          // than a single currentStep index.
+          const isActive = agent.status === 'running';
           return (
             <div key={agent.id} className={`text-[10.5px] rounded-xl p-2.5 transition ${isActive ? 'bg-indigo-50 border border-indigo-300' : 'bg-white border border-slate-200'}`}>
               <div className="flex justify-between items-center">
