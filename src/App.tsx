@@ -441,6 +441,8 @@ export default function App() {
             heardText={heardText}
             sttFeedback={sttFeedback}
             firstStep={getDynamicAdvice()[0]}
+            language={personalContext.language}
+            onChangeLanguage={(lang) => setPersonalContext(prev => ({ ...prev, language: lang }))}
             onToggleSpeech={toggleSpeechRecognition}
             onToggleVoice={handleToggleVoice}
             onTriggerAlert={handleTriggerAlert}
