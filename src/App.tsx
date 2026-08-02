@@ -485,6 +485,8 @@ export default function App() {
               shelterDistance={shelterInfo.distance}
               liveRoute={liveRoute}
               firstStep={getDynamicAdvice()[0]}
+              livePosition={livePosition}
+              shelterPos={liveShelter ? { lat: liveShelter.lat, lng: liveShelter.lng } : null}
             />
 
             {showLiveNav && (
