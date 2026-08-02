@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ActionStep, HazardSignal, AgentState, PersonalContext, Hazard } from '@/types/domain';
-import { LANGUAGES_MAP } from '@/constants/languages';
+import { LanguageProvider } from '@/i18n/LanguageProvider';
+import { initialLanguage, saveLanguage } from '@/lib/languageStore';
 import { INITIAL_AGENTS } from '@/constants/agents';
 import { getShelterInfo } from '@/lib/shelter';
 import { responseMode } from '@/constants/hazards';
@@ -66,7 +67,10 @@ export default function App() {
   // Whether the shelter shown is an officially designated site or a Places guess.
   const [shelterSource, setShelterSource] = useState<'official' | 'places' | null>(null);
   const [personalContext, setPersonalContext] = useState<PersonalContext>({
-    language: 'English',
+    // Restored from this device, or guessed from the browser's locale. It used
+    // to be hardcoded 'English', so every reload silently threw the choice away
+    // — see lib/languageStore.
+    language: initialLanguage(),
     location: '',
     // Ground floor and alone are the conservative defaults: assuming someone is
     // high up would tell them to stay put in a tsunami, and assuming companions
@@ -219,8 +223,14 @@ export default function App() {
   const updateContext = (patch: Partial<PersonalContext>) =>
     setPersonalContext((prev) => ({ ...prev, ...patch }));
 
-  // Translate labels dynamically based on selected language
-  const labels = LANGUAGES_MAP[personalContext.language];
+  // Language is the one part of the profile that outlives the session. Persisted
+  // from an effect rather than inside updateContext because the voice assistant
+  // sets the language with its own setPersonalContext call and would bypass it;
+  // this catches every writer, present and future. The first run re-saves what
+  // was just loaded, which also makes the browser-locale guess sticky.
+  useEffect(() => {
+    saveLanguage(personalContext.language);
+  }, [personalContext.language]);
 
   // Nearest real shelter (Places + haversine). Computed once per render — the
   // header, the AR overlay and the advice builder all want the same answer.
@@ -368,6 +378,10 @@ export default function App() {
   };
 
   return (
+    /* Every screen reads its copy from here via useT(). The language itself
+       still lives in personalContext — the provider only distributes it, so
+       there is no second source of truth to drift. */
+    <LanguageProvider language={personalContext.language}>
     <div className="min-h-dvh mobile-device-wrapper flex flex-col items-center justify-center p-0 sm:p-6 select-none">
       {/* Brand Header (Desktop Only) */}
       <BrandHeader />
@@ -662,12 +676,12 @@ export default function App() {
 
                   {/* HIGH-TECH FINAL ACTION ADVICE CARDS */}
                   {currentStep >= 4 && (
-                    <ActionCards steps={getDynamicAdvice()} labels={labels} onOpenSms={() => setShowSmsModal(true)} />
+                    <ActionCards steps={getDynamicAdvice()} onOpenSms={() => setShowSmsModal(true)} />
                   )}
 
                   {/* STANDBY STATE ADVICE PANEL */}
                   {currentStep < 0 && (
-                    <StandbyPanel labels={labels} onTriggerAlert={handleTriggerAlert} />
+                    <StandbyPanel onTriggerAlert={handleTriggerAlert} />
                   )}
 
                   {/* ACTIVE-ALERT CONTROLS — exit the danger stage (+ restart when complete) */}
@@ -722,7 +736,6 @@ export default function App() {
             {/* Dynamic iOS Safety Gate Modal (Sliding Draw Sheet) */}
             <SmsGateModal
               show={showSmsModal}
-              labels={labels}
               smsStatus={smsStatus}
               draftText={getDraftedSmsText()}
               onClose={() => setShowSmsModal(false)}
@@ -758,5 +771,6 @@ export default function App() {
 
       </div>
     </div>
+    </LanguageProvider>
   );
 }

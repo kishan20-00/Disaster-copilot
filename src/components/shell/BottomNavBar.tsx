@@ -1,4 +1,5 @@
 import { ShieldCheck, Compass, Users, AlertTriangle } from 'lucide-react';
+import { useT } from '@/i18n/context';
 
 interface BottomNavBarProps {
   activeTab: 'home' | 'navigate' | 'family';
@@ -14,11 +15,12 @@ interface BottomNavBarProps {
 // top of whichever tab is underneath, so it still gets a real active state
 // without needing a fourth persisted "current screen" concept.
 export function BottomNavBar({ activeTab, alertsOpen, onSelectHome, onSelectNavigate, onSelectFamily, onOpenAlerts }: BottomNavBarProps) {
+  const t = useT();
   const items: { id: string; label: string; Icon: typeof ShieldCheck; active: boolean; onClick: () => void }[] = [
-    { id: 'home', label: 'Home', Icon: ShieldCheck, active: activeTab === 'home' && !alertsOpen, onClick: onSelectHome },
-    { id: 'navigate', label: 'Navigate', Icon: Compass, active: activeTab === 'navigate' && !alertsOpen, onClick: onSelectNavigate },
-    { id: 'family', label: 'Family', Icon: Users, active: activeTab === 'family' && !alertsOpen, onClick: onSelectFamily },
-    { id: 'alerts', label: 'Alerts', Icon: AlertTriangle, active: alertsOpen, onClick: onOpenAlerts }
+    { id: 'home', label: t('nav.home'), Icon: ShieldCheck, active: activeTab === 'home' && !alertsOpen, onClick: onSelectHome },
+    { id: 'navigate', label: t('nav.navigate'), Icon: Compass, active: activeTab === 'navigate' && !alertsOpen, onClick: onSelectNavigate },
+    { id: 'family', label: t('nav.family'), Icon: Users, active: activeTab === 'family' && !alertsOpen, onClick: onSelectFamily },
+    { id: 'alerts', label: t('nav.alerts'), Icon: AlertTriangle, active: alertsOpen, onClick: onOpenAlerts }
   ];
 
   return (
