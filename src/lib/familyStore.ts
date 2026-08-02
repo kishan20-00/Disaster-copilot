@@ -68,7 +68,13 @@ export interface FamilyMember {
   addedAt: string;
 }
 
-export const RELATION_PRESETS = ['Partner', 'Child', 'Parent', 'Sibling', 'Friend', 'Carer'];
+// `as const` so each preset is a literal type: the Family tab renders these
+// through the message catalogue as `relation.${preset}`, and that template only
+// resolves to a valid MessageKey if the members are literals rather than string.
+// A preset added here without a matching catalogue entry is a compile error.
+export const RELATION_PRESETS = ['Partner', 'Child', 'Parent', 'Sibling', 'Friend', 'Carer'] as const;
+
+export type RelationPreset = typeof RELATION_PRESETS[number];
 
 export function loadFamily(scope: string | null): FamilyMember[] {
   if (!scope) return [];

@@ -5,6 +5,7 @@ import type { LatLng } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
 import { haversineMeters, formatDistance, bearingDegrees } from '@/services/maps';
 import { hazardInfo } from '@/constants/hazards';
+import { useT } from '@/i18n/context';
 
 interface LiveNavigationViewProps {
   activeHazard: Hazard;
@@ -37,6 +38,7 @@ export function LiveNavigationView({
   isListening, heardText, mapLayer, onCycleLayer, cameraMode, onToggleCamera,
   onTriggerAlert, onExitToBrowse, onEndNavigation
 }: LiveNavigationViewProps) {
+  const t = useT();
   const destination = liveShelter ? { lat: liveShelter.lat, lng: liveShelter.lng } : null;
   const bearing = livePosition && destination ? bearingDegrees(livePosition, destination) : null;
   const remainingM = livePosition && destination ? haversineMeters(livePosition, destination) : null;
@@ -60,7 +62,7 @@ export function LiveNavigationView({
           <button
             onClick={onExitToBrowse}
             className="w-11 h-11 rounded-full bg-white/85 backdrop-blur border border-slate-200 text-slate-700 flex items-center justify-center shadow-lg active:scale-95 transition"
-            aria-label="Back"
+            aria-label={t('livenav.back')}
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -69,7 +71,7 @@ export function LiveNavigationView({
             className="h-9 px-3.5 rounded-full bg-white/85 backdrop-blur border border-slate-200 text-slate-600 text-[11px] font-bold flex items-center gap-1.5 shadow-lg active:scale-95 transition"
           >
             <Search className="w-3.5 h-3.5" />
-            Search
+            {t('livenav.search')}
           </button>
         </div>
         <button
@@ -88,7 +90,7 @@ export function LiveNavigationView({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-400" />
             </span>
-            <span className="text-[10.5px] font-bold text-slate-700">Rerouting…</span>
+            <span className="text-[10.5px] font-bold text-slate-700">{t('livenav.rerouting')}</span>
           </div>
         )}
 
@@ -102,10 +104,10 @@ export function LiveNavigationView({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xl font-black text-slate-900 leading-tight truncate">
-              Head toward {liveShelter?.name ?? 'your shelter'}
+              {t('livenav.headToward', { name: liveShelter?.name ?? t('livenav.yourShelter') })}
             </p>
             <p className="text-lg text-indigo-600 font-bold mt-0.5">
-              {remainingM !== null ? `${formatDistance(remainingM)} remaining` : (liveRoute?.distanceText ?? '—')}
+              {remainingM !== null ? t('livenav.remaining', { distance: formatDistance(remainingM) }) : (liveRoute?.distanceText ?? '—')}
             </p>
           </div>
         </div>
@@ -128,7 +130,7 @@ export function LiveNavigationView({
               ? 'bg-indigo-600 border-indigo-400 text-white'
               : 'bg-white/85 backdrop-blur border-slate-200 text-slate-600'
           }`}
-          title={`Layer: ${mapLayer}`}
+          title={t('livenav.layer', { layer: mapLayer })}
         >
           <Layers className="w-4.5 h-4.5" />
         </button>
@@ -139,7 +141,7 @@ export function LiveNavigationView({
               ? 'bg-violet-600 border-violet-400 text-white'
               : 'bg-indigo-600 border-indigo-400 text-white'
           }`}
-          title="AR guidance"
+          title={t('livenav.arGuidance')}
         >
           <Camera className="w-5 h-5" />
         </button>
@@ -154,7 +156,7 @@ export function LiveNavigationView({
           <div className="bg-black/70 backdrop-blur rounded-xl p-3 flex items-center gap-2.5">
             <Mic className={`w-4 h-4 text-white shrink-0 ${isListening ? 'animate-pulse' : ''}`} />
             <p className="text-white text-[12.5px] font-medium italic truncate">
-              {heardText ? `"${heardText}"` : 'Listening…'}
+              {heardText ? `“${heardText}”` : t('voice.listening')}
             </p>
           </div>
         </div>
@@ -181,7 +183,7 @@ export function LiveNavigationView({
             worst ? 'bg-red-500/15 text-red-300 border border-red-500/30' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
           }`}>
             {worst ? <AlertTriangle className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
-            {worst ? 'Hazard nearby' : 'Path Clear'}
+            {worst ? t('livenav.hazardNearby') : t('livenav.pathClear')}
           </div>
         </div>
         <div className="flex gap-3">
@@ -190,7 +192,7 @@ export function LiveNavigationView({
             className="flex-1 h-13 py-3.5 rounded-full bg-red-600/15 border border-red-500/40 text-red-300 font-bold flex items-center justify-center gap-2 active:scale-95 transition"
           >
             <X className="w-4 h-4" />
-            End
+            {t('livenav.end')}
           </button>
           <button
             onClick={onTriggerAlert}
@@ -198,7 +200,7 @@ export function LiveNavigationView({
             className="flex-[2] h-13 py-3.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md flex items-center justify-center gap-2 active:scale-95 disabled:opacity-45 transition"
           >
             <RotateCcw className="w-4 h-4" />
-            Reroute
+            {t('livenav.reroute')}
           </button>
         </div>
       </div>

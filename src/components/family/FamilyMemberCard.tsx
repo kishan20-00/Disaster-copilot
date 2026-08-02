@@ -7,6 +7,7 @@ import { familyVerdict } from '@/lib/familyStatus';
 import { hazardInfo } from '@/constants/hazards';
 import type { LatLng } from '@/services/geolocation';
 import { haversineMeters } from '@/services/maps';
+import { useT } from '@/i18n/context';
 
 /**
  * Both distance chips share this so they read as one scale. `formatDistance` is
@@ -50,6 +51,7 @@ interface FamilyMemberCardProps {
 export function FamilyMemberCard({
   member, impact, scanStatus, livePosition, onViewOnMap, onOpenSms, onRemove
 }: FamilyMemberCardProps) {
+  const t = useT();
   const verdict = familyVerdict(impact, scanStatus);
 
   // Distance from the user to the place they recorded. Real geometry, and the
@@ -88,8 +90,8 @@ export function FamilyMemberCard({
           <button
             onClick={onRemove}
             className="shrink-0 p-1.5 -mr-1 text-slate-300 hover:text-red-500 transition"
-            title={`Remove ${member.name}`}
-            aria-label={`Remove ${member.name}`}
+            title={t('card.remove', { name: member.name })}
+            aria-label={t('card.remove', { name: member.name })}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -103,19 +105,19 @@ export function FamilyMemberCard({
           {/* "Expected" is load-bearing, not hedging: this is where the user said
               they would be, not where anyone has been observed. */}
           <span className="text-[10px] font-mono text-slate-600 truncate min-w-0">
-            expected at {member.place.name}
+            {t('card.expectedAt', { place: member.place.name })}
           </span>
         </div>
 
         {/* ── Metric chips: the honest counterparts of battery / signal / speed ── */}
         <div className="grid grid-cols-3 gap-1.5">
-          <Chip Icon={MapPin} label="from you" value={fromYou ?? '—'} />
+          <Chip Icon={MapPin} label={t('card.fromYou')} value={fromYou ?? '—'} />
           <Chip
             Icon={Crosshair}
-            label={hazard ? `from ${hazard.label.toLowerCase()}` : 'from hazard'}
+            label={hazard ? t('card.fromHazard', { hazard: hazard.label.toLowerCase() }) : t('card.fromHazardGeneric')}
             value={impact?.distanceKm != null ? fmtKm(impact.distanceKm) : '—'}
           />
-          <Chip Icon={Clock} label="recorded" value={describeAge(member.addedAt).replace(/^added /, '')} />
+          <Chip Icon={Clock} label={t('card.recorded')} value={describeAge(member.addedAt).replace(/^added /, '')} />
         </div>
 
         {/* ── Severity meter ──
@@ -125,12 +127,18 @@ export function FamilyMemberCard({
             the assessment does not have. */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[9px] font-mono uppercase tracking-wider text-slate-400">Assessed severity</span>
+            <span className="text-[9px] font-mono uppercase tracking-wider text-slate-400">{t('card.assessedSeverity')}</span>
             <span className={`text-[9.5px] font-black uppercase tracking-wide ${verdict.tone.text}`}>
-              {impact ? impact.severity : '—'}
+              {impact ? t(`severity.${impact.severity}`) || '—' : '—'}
             </span>
           </div>
-          <div className="flex gap-1" role="img" aria-label={`Severity ${impact?.severity ?? 'not assessed'}`}>
+          <div
+            className="flex gap-1"
+            role="img"
+            aria-label={t('card.severityAria', {
+              level: impact ? t(`severity.${impact.severity}`) || t('card.notAssessed') : t('card.notAssessed')
+            })}
+          >
             {[0, 1, 2, 3, 4].map((i) => (
               <span
                 key={i}
@@ -153,7 +161,7 @@ export function FamilyMemberCard({
             className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white active:scale-95 transition"
           >
             <Navigation className="w-3.5 h-3.5" />
-            <span className="text-[9px] font-black uppercase tracking-wide leading-none">Show place</span>
+            <span className="text-[9px] font-black uppercase tracking-wide leading-none">{t('card.showPlace')}</span>
           </button>
 
           <button
@@ -161,7 +169,7 @@ export function FamilyMemberCard({
             className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 active:scale-95 transition"
           >
             <MessageSquareWarning className="w-3.5 h-3.5" />
-            <span className="text-[9px] font-black uppercase tracking-wide leading-none">Message</span>
+            <span className="text-[9px] font-black uppercase tracking-wide leading-none">{t('card.message')}</span>
           </button>
 
           {/* A dead button is worse than an absent one, so with no number stored
@@ -172,15 +180,15 @@ export function FamilyMemberCard({
               className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 active:scale-95 transition"
             >
               <Phone className="w-3.5 h-3.5" />
-              <span className="text-[9px] font-black uppercase tracking-wide leading-none">Call</span>
+              <span className="text-[9px] font-black uppercase tracking-wide leading-none">{t('card.call')}</span>
             </a>
           ) : (
             <span
               className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-400"
-              title="No phone number saved for this person"
+              title={t('card.noNumberTitle')}
             >
               <Phone className="w-3.5 h-3.5" />
-              <span className="text-[9px] font-black uppercase tracking-wide leading-none">No number</span>
+              <span className="text-[9px] font-black uppercase tracking-wide leading-none">{t('card.noNumber')}</span>
             </span>
           )}
         </div>

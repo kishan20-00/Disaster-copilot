@@ -3,6 +3,7 @@ import {
 } from 'lucide-react';
 import type { AuthUser, PersonalContext, Language, Companions } from '@/types/domain';
 import { floorLabel, describeFloor, companionsLabel, TSUNAMI_MIN_SAFE_FLOOR } from '@/lib/profileFormat';
+import { useT } from '@/i18n/context';
 
 interface ProfileSheetProps {
   show: boolean;
@@ -27,10 +28,18 @@ const FLOOR_MIN = -5;
 const FLOOR_MAX = 200;
 const LANGUAGES: Language[] = ['English', 'Japanese', 'Chinese', 'Vietnamese'];
 
+/** Each language written in itself, never translated. */
+const LANGUAGE_ENDONYM: Record<Language, string> = {
+  English: 'English', Japanese: '日本語', Chinese: '中文', Vietnamese: 'Tiếng Việt'
+};
+
 function Choice<T extends string>({
-  label, Icon, value, options, onPick, hint
+  label, Icon, value, options, onPick, hint, render
 }: {
   label: string; Icon: typeof User; value: T; options: T[]; onPick: (v: T) => void; hint?: string;
+  /** How to display an option. The value itself is an internal identifier, so
+      it is never what the user should read. Defaults to the raw value. */
+  render?: (v: T) => string;
 }) {
   return (
     <div className="space-y-1.5">
@@ -49,7 +58,7 @@ function Choice<T extends string>({
                 : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700'
             }`}
           >
-            {o}
+            {render ? render(o) : o}
           </button>
         ))}
       </div>
@@ -65,11 +74,12 @@ function Choice<T extends string>({
 export function ProfileSheet({
   show, user, sessionExpiry, personalContext, onChangeContext, onClose, onSignOut
 }: ProfileSheetProps) {
+  const t = useT();
   if (!show) return null;
 
   const expiryText = sessionExpiry
     ? new Date(sessionExpiry * 1000).toLocaleString()
-    : 'until you sign out';
+    : t('profile.untilSignOut');
 
   return (
     <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-50 flex flex-col justify-end animate-in fade-in duration-200">
@@ -88,11 +98,11 @@ export function ProfileSheet({
                 </div>
               )}
               <div className="min-w-0">
-                <h3 className="text-sm font-black text-slate-900 truncate">{user?.name ?? 'Guest'}</h3>
+                <h3 className="text-sm font-black text-slate-900 truncate">{user?.name ?? t('profile.guest')}</h3>
                 <p className="text-[10px] font-mono text-slate-500 truncate">
-                  {user ? user.email : 'Emergency Mode — not signed in'}
+                  {user ? user.email : t('profile.notSignedIn')}
                 </p>
-                {user && <p className="text-[9px] font-mono text-slate-400 mt-0.5">Google session · {expiryText}</p>}
+                {user && <p className="text-[9px] font-mono text-slate-400 mt-0.5">{t('profile.session', { expiry: expiryText })}</p>}
               </div>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition shrink-0">
@@ -105,9 +115,9 @@ export function ProfileSheet({
           {/* ── What actually shapes the advice ── */}
           <section className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-3.5">
             <div>
-              <h4 className="text-[10.5px] font-black uppercase tracking-wider text-slate-700">Your situation</h4>
+              <h4 className="text-[10.5px] font-black uppercase tracking-wider text-slate-700">{t('profile.situation')}</h4>
               <p className="text-[9px] font-mono text-slate-500 mt-0.5">
-                Every instruction and the emergency message are written around these.
+                {t('profile.situationHint')}
               </p>
             </div>
             {/* A number, not a picked label. The old options were Basement /
@@ -117,7 +127,7 @@ export function ProfileSheet({
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-500">Which floor</span>
+                <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-500">{t('profile.whichFloor')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -145,8 +155,8 @@ export function ProfileSheet({
               </div>
               <p className="text-[9px] font-mono text-slate-400 leading-snug">
                 {personalContext.floor >= TSUNAMI_MIN_SAFE_FLOOR
-                  ? `At or above the ${TSUNAMI_MIN_SAFE_FLOOR}th floor, so a tsunami may not require moving.`
-                  : 'Below the 4th floor, so a tsunami means climbing higher.'}
+                  ? t('profile.tsunamiSafe', { floor: TSUNAMI_MIN_SAFE_FLOOR })
+                  : t('profile.tsunamiClimb')}
               </p>
             </div>
 
@@ -156,7 +166,7 @@ export function ProfileSheet({
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-500">Who is with you</span>
+                <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-500">{t('profile.whoWithYou')}</span>
                 <span className="text-[9px] font-mono text-slate-500 ml-auto">{companionsLabel(personalContext.companions)}</span>
               </div>
               <div className="flex items-center gap-2">
@@ -167,7 +177,7 @@ export function ProfileSheet({
                 <div className="flex-1 text-center bg-white border border-slate-200 rounded-xl py-1.5">
                   <span className="block text-[13px] font-black text-slate-900 leading-none">{personalContext.companions.count}</span>
                   <span className="block text-[9px] font-mono text-slate-500 mt-0.5">
-                    {personalContext.companions.count === 0 ? 'travelling alone' : 'people with you'}
+                    {personalContext.companions.count === 0 ? t('profile.alone') : t('profile.peopleWith')}
                   </span>
                 </div>
                 <button
@@ -183,22 +193,27 @@ export function ProfileSheet({
                       personalContext.companions.needsAssistance
                         ? 'bg-amber-600/15 border-amber-500/60 text-amber-800'
                         : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700'
-                    }`}>Someone needs help moving</button>
+                    }`}>{t('profile.needsHelp')}</button>
                   <button
                     onClick={() => onChangeContext({ companions: { ...personalContext.companions, needsCarrying: !personalContext.companions.needsCarrying } })}
                     className={`flex-1 py-1.5 rounded-lg border text-[9.5px] font-bold transition ${
                       personalContext.companions.needsCarrying
                         ? 'bg-amber-600/15 border-amber-500/60 text-amber-800'
                         : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700'
-                    }`}>Someone must be carried</button>
+                    }`}>{t('profile.mustBeCarried')}</button>
                 </div>
               )}
             </div>
-            <Choice label="Mobility" Icon={Accessibility} value={personalContext.mobility} options={MOBILITY}
+            <Choice label={t('profile.mobility')} Icon={Accessibility} value={personalContext.mobility} options={MOBILITY}
               onPick={(v) => onChangeContext({ mobility: v })}
-              hint="Wheelchair selects step-free routing wording." />
-            <Choice label="Language" Icon={Languages} value={personalContext.language} options={LANGUAGES}
-              onPick={(v) => onChangeContext({ language: v })} />
+              render={(v) => t(v === 'Wheelchair User' ? 'mobility.wheelchair' : 'mobility.fullyMobile')}
+              hint={t('profile.mobilityHint')} />
+            {/* Languages are listed as endonyms — a speaker looking for their own
+                language should find it written the way they write it, whatever
+                the UI currently happens to be set to. */}
+            <Choice label={t('profile.language')} Icon={Languages} value={personalContext.language} options={LANGUAGES}
+              onPick={(v) => onChangeContext({ language: v })}
+              render={(v) => LANGUAGE_ENDONYM[v]} />
           </section>
 
           {user && (
@@ -207,7 +222,7 @@ export function ProfileSheet({
               className="w-full py-2.5 bg-red-600/15 hover:bg-red-600/25 border border-red-500/40 text-red-300 hover:text-red-200 rounded-xl text-[11px] font-black uppercase tracking-wide transition active:scale-95 flex items-center justify-center gap-1.5"
             >
               <LogOut className="w-3.5 h-3.5" />
-              Sign out
+              {t('profile.signOut')}
             </button>
           )}
         </div>
