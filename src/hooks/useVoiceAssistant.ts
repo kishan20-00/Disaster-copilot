@@ -3,6 +3,7 @@ import type { ActionStep, Hazard, Language, PersonalContext } from '@/types/doma
 import type { LatLng } from '@/services/geolocation';
 import { getLangCode, speakText } from '@/lib/speech';
 import { buildAdvice } from '@/lib/advice';
+import { askHazardQuestion } from '@/services/gemini';
 
 export interface UseVoiceAssistantParams {
   voiceAssistant: boolean;
@@ -195,7 +196,26 @@ export function useVoiceAssistant(params: UseVoiceAssistantParams) {
       setSttFeedback(feedback);
       speakText(feedback, getLangCode(personalContext.language));
     } else {
-      setSttFeedback(`Heard: "${text}". No command found.`);
+      // Not a profile/action command — treat it as a safety question and answer
+      // it aloud, grounded in the Japan safety guide, in the user's language.
+      answerHazardQuestion(text);
+    }
+  };
+
+  // Route unmatched speech to the grounded safety Q&A assistant and speak the
+  // reply. Kept separate so the command handler stays synchronous.
+  const answerHazardQuestion = async (question: string) => {
+    const lang = personalContext.language;
+    setSttFeedback(`Heard: "${question}". Thinking…`);
+    try {
+      const answer = await askHazardQuestion(question, lang);
+      setSttFeedback(answer);
+      speakText(answer, getLangCode(lang));
+    } catch (err) {
+      console.error('Hazard Q&A failed', err);
+      const fallback = 'Sorry, I could not answer that. In an emergency, drop, cover, and hold on, or move uphill away from the coast.';
+      setSttFeedback(fallback);
+      speakText(fallback, getLangCode(lang));
     }
   };
 

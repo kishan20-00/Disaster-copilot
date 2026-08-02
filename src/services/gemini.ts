@@ -11,6 +11,7 @@ const client = isGeminiConfigured ? new GoogleGenAI({ apiKey: API_KEY! }) : null
 // consumers importing them from this module keep working unchanged.
 import type { Language, Hazard, PersonalProfile, HazardSignal, ActionStep } from '../types/domain';
 export type { Language, Hazard, PersonalProfile, HazardSignal, ActionStep };
+import { SAFETY_GUIDE, offlineHazardAnswer } from '../data/safetyGuide';
 
 async function generateJson<T>(prompt: string, schema: any): Promise<T> {
   if (!client) throw new Error('Gemini not configured. Set VITE_GEMINI_API_KEY in .env');
@@ -144,6 +145,23 @@ export async function generateActionSteps(input: {
     `Step 3 = evacuate toward "${shelterName}"${shelterDistance ? ` (${shelterDistance})` : ''}${walkingDuration ? ` — walking ETA ${walkingDuration}` : ''}.`;
   const result = await generateJson<{ steps: ActionStep[] }>(prompt, actionStepSchema);
   return result.steps;
+}
+
+// Voice hazard Q&A: answers a spoken safety question grounded ONLY in the
+// Japan safety guide, in the user's language, short enough to speak aloud.
+// Falls back to an offline keyword answer when Gemini is not configured.
+export async function askHazardQuestion(question: string, language: Language): Promise<string> {
+  if (!isGeminiConfigured) return offlineHazardAnswer(question);
+  return generateText(
+    `You are the SAFETY EDUCATION VOICE ASSISTANT for a disaster co-pilot used in Japan. ` +
+    `Answer the user's spoken question using ONLY the official safety guide below. ` +
+    `If the guide does not cover it, say so briefly and give the closest safe general advice; ` +
+    `never invent numbers, place names, or procedures. ` +
+    `Reply in ${langName(language)}, in 1–3 short spoken sentences (max 60 words), calm and directive — ` +
+    `no lists, markdown, or emoji, because this is read aloud.\n\n` +
+    `=== OFFICIAL SAFETY GUIDE ===\n${SAFETY_GUIDE}\n=== END GUIDE ===\n\n` +
+    `User question: "${question}"`
+  );
 }
 
 export async function generateSmsDraft(input: {
