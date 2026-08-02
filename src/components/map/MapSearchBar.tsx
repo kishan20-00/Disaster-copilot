@@ -3,6 +3,7 @@ import { Search, X, User, MapPin, Loader2 } from 'lucide-react';
 import type { LatLng } from '@/services/geolocation';
 import type { PlaceSuggestion } from '@/services/placeSearch';
 import { fetchPlaceSuggestions } from '@/services/placeSearch';
+import { useT } from '@/i18n/context';
 
 interface MapSearchBarProps {
   searchQuery: string;
@@ -24,6 +25,7 @@ export function MapSearchBar({
   searchQuery, onSearchChange, onClearSearch, onSelectSuggestion,
   near, placeholderLocation, user, onOpenProfile
 }: MapSearchBarProps) {
+  const t = useT();
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -92,7 +94,9 @@ export function MapSearchBar({
             onChange={(e) => onSearchChange(e.target.value)}
             onKeyDown={onKeyDown}
             onFocus={() => setOpen(suggestions.length > 0)}
-            placeholder={placeholderLocation ? `Check another place near ${placeholderLocation}…` : 'Check another place…'}
+            placeholder={placeholderLocation
+              ? t('search.placeholderNear', { place: placeholderLocation })
+              : t('search.placeholder')}
             className="bg-transparent text-xs text-slate-900 placeholder-slate-400 focus:outline-none w-full border-none"
           />
           {searchQuery && (
@@ -112,10 +116,10 @@ export function MapSearchBar({
         <button
           onClick={onOpenProfile}
           className="w-7 h-7 shrink-0 ml-1.5 rounded-full border border-slate-300 hover:border-indigo-500/60 flex items-center justify-center transition bg-slate-100 text-slate-500 hover:text-slate-900 overflow-hidden active:scale-95"
-          title="Profile and settings"
+          title={t('search.profile')}
         >
           {user?.avatar
-            ? <img src={user.avatar} alt="Profile" className="w-full h-full rounded-full" />
+            ? <img src={user.avatar} alt={t('search.profile')} className="w-full h-full rounded-full" />
             : <User className="w-3.5 h-3.5" />}
         </button>
       </div>

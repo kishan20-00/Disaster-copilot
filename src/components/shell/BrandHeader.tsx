@@ -1,7 +1,9 @@
 import { Shield } from 'lucide-react';
+import { useT } from '@/i18n/context';
 
 // Desktop-only brand header shown above the device mockup.
 export function BrandHeader() {
+  const t = useT();
   return (
     <div className="hidden sm:flex flex-col items-center mb-6 text-center">
       <div className="flex items-center gap-2 mb-1">
@@ -11,7 +13,7 @@ export function BrandHeader() {
         </h1>
       </div>
       <p className="text-slate-500 text-sm max-w-sm">
-        A premium multi-agent disaster co-pilot with a strict human-approval safety gate.
+        {t('brand.tagline')}
       </p>
     </div>
   );

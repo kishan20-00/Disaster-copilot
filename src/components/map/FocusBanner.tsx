@@ -1,4 +1,5 @@
 import { Crosshair, LocateFixed } from 'lucide-react';
+import { useT } from '@/i18n/context';
 
 interface FocusBannerProps {
   placeName: string | null;
@@ -12,17 +13,18 @@ interface FocusBannerProps {
 // never mistake a route from a place they looked up earlier for their own. So the
 // state is loud, permanent while it lasts, and one tap from being undone.
 export function FocusBanner({ placeName, onReturnToMe }: FocusBannerProps) {
+  const t = useT();
   if (!placeName) return null;
   return (
     <div className="bg-amber-500/15 border border-amber-500/50 rounded-2xl px-3 py-2 flex items-center gap-2.5 shadow-xl backdrop-blur-md">
       <Crosshair className="w-4 h-4 text-amber-400 shrink-0" />
       <div className="min-w-0 flex-1">
         <span className="block text-[10px] font-black uppercase tracking-wider text-amber-300 leading-none">
-          Checking another place
+          {t('focus.title')}
         </span>
         <span className="block text-[11px] font-bold text-slate-900 truncate mt-0.5">{placeName}</span>
         <span className="block text-[9px] font-mono text-amber-200/70 leading-none mt-0.5">
-          Not your location — routes shown are from here
+          {t('focus.note')}
         </span>
       </div>
       <button
@@ -30,7 +32,7 @@ export function FocusBanner({ placeName, onReturnToMe }: FocusBannerProps) {
         className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 bg-white/70 hover:bg-amber-50 border border-amber-500/40 text-amber-700 hover:text-amber-900 rounded-xl text-[9.5px] font-black uppercase tracking-wide transition active:scale-95"
       >
         <LocateFixed className="w-3 h-3" />
-        Back to me
+        {t('focus.back')}
       </button>
     </div>
   );

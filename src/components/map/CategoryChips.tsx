@@ -1,17 +1,20 @@
+import { useT } from '@/i18n/context';
+
 interface CategoryChipsProps {
   filterCategory: string;
   onSelectCategory: (id: string) => void;
 }
 
 export function CategoryChips({ filterCategory, onSelectCategory }: CategoryChipsProps) {
+  const t = useT();
   return (
     <div className="overflow-x-auto whitespace-nowrap flex gap-2 pb-1 scrollbar-none select-none">
       {[
-        { id: 'all', label: 'All', emoji: '🗺️' },
-        { id: 'shelter', label: 'Shelters', emoji: '🏥' },
-        { id: 'water', label: 'Water', emoji: '⛲' },
-        { id: 'medical', label: 'Medical', emoji: '🩹' },
-        { id: 'station', label: 'Stations', emoji: '🚉' }
+        { id: 'all', label: t('category.all'), emoji: '🗺️' },
+        { id: 'shelter', label: t('category.shelter'), emoji: '🏥' },
+        { id: 'water', label: t('category.water'), emoji: '⛲' },
+        { id: 'medical', label: t('category.medical'), emoji: '🩹' },
+        { id: 'station', label: t('category.station'), emoji: '🚉' }
       ].map((chip) => {
         const isActive = filterCategory === chip.id;
         return (

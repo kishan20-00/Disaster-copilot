@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { useT } from '@/i18n/context';
 
 interface MarkerPopupProps {
   activeMarker: string | null;
@@ -9,6 +10,7 @@ interface MarkerPopupProps {
 }
 
 export function MarkerPopup({ activeMarker, markers, currentStep, onClose, onNavigate }: MarkerPopupProps) {
+  const t = useT();
   if (!activeMarker) return null;
   const marker = markers.find((m: any) => m.id === activeMarker);
   if (!marker) return null;
@@ -34,13 +36,13 @@ export function MarkerPopup({ activeMarker, markers, currentStep, onClose, onNav
       {isShelter && (
         <div className="flex justify-between items-center mt-1 text-[10px]">
           {/* Accessibility is not in the Places response, so it is not claimed. */}
-          <span className="text-slate-500 font-mono">Accessibility unverified</span>
+          <span className="text-slate-500 font-mono">{t('marker.accessibilityUnknown')}</span>
           {currentStep < 0 && (
             <button
               onClick={onNavigate}
               className="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold px-2.5 py-1 rounded-lg uppercase tracking-wide transition font-sans text-[9px]"
             >
-              Navigate Route
+              {t('marker.navigate')}
             </button>
           )}
         </div>

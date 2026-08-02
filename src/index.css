@@ -184,3 +184,17 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .splash-ring, .splash-sweep, .splash-emblem, .splash-rise { animation: none; }
 }
+
+/* CJK typography.
+   The UI leans on `uppercase tracking-wide` for its small-caps labels. Neither
+   does anything useful to Japanese or Chinese: text-transform is a no-op on
+   ideographs, while the wide letter-spacing that pairs with it pushes the
+   glyphs apart and makes a label look broken. `<html lang>` is set by
+   LanguageProvider, so keying off :lang() covers every such label at once
+   without touching the class list on ~40 elements. The descendant selector
+   (0,2,0) outranks the tracking-* utility it is overriding (0,1,0). */
+:lang(ja) .uppercase,
+:lang(zh) .uppercase {
+  text-transform: none;
+  letter-spacing: normal;
+}

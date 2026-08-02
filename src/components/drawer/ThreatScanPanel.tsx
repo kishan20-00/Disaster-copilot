@@ -1,6 +1,9 @@
 import { Radar, ShieldCheck, AlertTriangle, WifiOff, Clock, MapPin, Home, Footprints, Eye } from 'lucide-react';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardLabel, hazardRationale } from '@/constants/hazards';
 import type { ThreatScanState } from '@/lib/impact';
+import { fmtKm } from '@/lib/impact';
+import { useT } from '@/i18n/context';
+import { hazardHeadline, hazardSource } from '@/services/alerts';
 
 interface ThreatScanPanelProps {
   scan: ThreatScanState | null;
@@ -14,13 +17,11 @@ const SEVERITY_STYLE: Record<string, string> = {
   none: 'bg-slate-50 border-slate-200 text-slate-600'
 };
 
-const fmtDistance = (km: number | null) =>
-  km === null ? 'distance unknown' : km < 10 ? `${km.toFixed(1)} km away` : `${Math.round(km)} km away`;
-
 // Result of the live hazard scan: what was checked, what was found, and whether
 // it reaches the user. Shown instead of a hazard picker — the hazard is detected,
 // not selected.
 export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
+  const t = useT();
   if (!scan) return null;
 
   if (scan.status === 'scanning') {
@@ -29,10 +30,10 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
         <Radar className="w-4 h-4 text-indigo-500 animate-spin shrink-0" style={{ animationDuration: '2.5s' }} />
         <div className="min-w-0">
           <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans text-indigo-600 block">
-            Scanning live hazard feeds
+            {t('scan.scanning')}
           </span>
           <span className="text-[9.5px] font-mono text-slate-500">
-            JMA quake/tsunami/typhoon · USGS · GDACS worldwide
+            {t('scan.sources')}
           </span>
         </div>
       </div>
@@ -45,15 +46,14 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
         <div className="flex items-center gap-2">
           <WifiOff className="w-4 h-4 text-amber-500 shrink-0" />
           <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans text-amber-700">
-            Threat status unknown
+            {t('scan.unknownTitle')}
           </span>
         </div>
         <p className="text-[10px] text-slate-600 font-mono leading-relaxed">
-          No hazard feed could be reached, so this is <strong>not</strong> an all-clear. Retry once you have a
-          connection.
+          {t('alerts.unavailable')}
         </p>
         {!!scan.sourcesFailed.length && (
-          <p className="text-[9px] font-mono text-slate-500">Failed: {scan.sourcesFailed.join(', ')}</p>
+          <p className="text-[9px] font-mono text-slate-500">{t('scan.failed', { sources: scan.sourcesFailed.join(', ') })}</p>
         )}
       </div>
     );
@@ -67,29 +67,29 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans text-emerald-700">
-              No active threat at your location
+              {t('scan.clearTitle')}
             </span>
           </div>
           <span className="text-[9px] font-mono text-slate-500 shrink-0">
-            {scan.verdict?.all.length ?? 0} events
+            {t('scan.events', { count: scan.verdict?.all.length ?? 0 })}
           </span>
         </div>
 
         {closest && (
           <div className="border-t border-emerald-300/60 pt-2 space-y-1">
             <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">
-              Closest recent event
+              {t('scan.closest')}
             </span>
             <p className="text-[10.5px] text-slate-800 font-mono leading-snug break-words">
-              {closest.hazard.headline}
+              {hazardHeadline(closest.hazard)}
             </p>
             <p className="text-[9.5px] text-slate-500 font-mono leading-relaxed">{closest.impact.basis}</p>
           </div>
         )}
 
         <p className="text-[9px] font-mono text-slate-500 border-t border-emerald-300/40 pt-1.5">
-          Checked {scan.sourcesQueried.join(' · ')}
-          {scan.sourcesFailed.length ? ` — unreachable: ${scan.sourcesFailed.join(', ')}` : ''}
+          {t('scan.checked', { sources: scan.sourcesQueried.join(' · ') })}
+          {scan.sourcesFailed.length ? ` — ${t('scan.unreachable', { sources: scan.sourcesFailed.join(', ') })}` : ''}
         </p>
       </div>
     );
@@ -99,15 +99,14 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
   const worst = scan.verdict?.worst;
   if (!worst) return null;
   const tone = SEVERITY_STYLE[worst.impact.severity] ?? SEVERITY_STYLE.none;
-  const info = hazardInfo(worst.hazard.hazard);
 
   // What to DO is the single most important thing on this card — a typhoon that
   // reaches you means stay inside, not evacuate.
   const action = worst.impact.response === 'evacuate'
-    ? { Icon: Footprints, text: 'Evacuate now', hint: info.rationale }
+    ? { Icon: Footprints, text: t('scan.evacuateNow'), hint: hazardRationale(worst.hazard.hazard) }
     : worst.impact.response === 'shelter_in_place'
-    ? { Icon: Home, text: 'Stay inside — do not evacuate', hint: info.rationale }
-    : { Icon: Eye, text: 'Monitor only', hint: info.rationale };
+    ? { Icon: Home, text: t('scan.stayInside'), hint: hazardRationale(worst.hazard.hazard) }
+    : { Icon: Eye, text: t('scan.monitorOnly'), hint: hazardRationale(worst.hazard.hazard) };
 
   return (
     <div className={`border rounded-2xl p-3.5 space-y-2 shadow-lg animate-in fade-in duration-300 ${tone}`}>
@@ -115,7 +114,9 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
         <div className="flex items-center gap-2 min-w-0">
           <AlertTriangle className="w-4 h-4 shrink-0 animate-pulse" />
           <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans truncate">
-            {worst.impact.severity} {info.label} — affects you
+            {t('scan.affectsYou', {
+              hazard: `${t(`severity.${worst.impact.severity}`)} ${hazardLabel(worst.hazard.hazard)}`.trim()
+            })}
           </span>
         </div>
         {worst.impact.leadTimeHours !== null && worst.impact.leadTimeHours > 0 && (
@@ -125,7 +126,7 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
         )}
       </div>
 
-      <p className="text-[10.5px] font-mono leading-snug break-words">{worst.hazard.headline}</p>
+      <p className="text-[10.5px] font-mono leading-snug break-words">{hazardHeadline(worst.hazard)}</p>
 
       <div className="flex items-start gap-2 bg-white/60 rounded-xl px-2.5 py-2 border border-current/20">
         <action.Icon className="w-4 h-4 shrink-0 mt-0.5" />
@@ -138,12 +139,14 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-mono opacity-80">
         <span className="flex items-center gap-1">
           <MapPin className="w-3 h-3" />
-          {fmtDistance(worst.impact.distanceKm)}
+          {worst.impact.distanceKm !== null
+            ? t('alerts.away', { distance: fmtKm(worst.impact.distanceKm) })
+            : t('alerts.distanceUnknown')}
         </span>
         {worst.impact.estimatedMmi !== null && (
-          <span>est. intensity MMI {worst.impact.estimatedMmi.toFixed(1)}</span>
+          <span>{t('scan.mmi', { value: worst.impact.estimatedMmi.toFixed(1) })}</span>
         )}
-        <span>{worst.hazard.source}</span>
+        <span>{hazardSource(worst.hazard)}</span>
       </div>
 
       <p className="text-[9.5px] font-mono leading-relaxed opacity-90 border-t border-current/15 pt-1.5">

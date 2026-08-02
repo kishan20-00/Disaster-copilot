@@ -1,4 +1,5 @@
 import type { Hazard, ResponseMode } from '@/types/domain';
+import { tActive } from '@/i18n/context';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // One table describing every hazard the app handles. Anything that used to be a
@@ -134,5 +135,19 @@ export const HAZARD_INFO: Record<Hazard, HazardInfo> = {
 };
 
 export const hazardInfo = (h: Hazard): HazardInfo => HAZARD_INFO[h] ?? HAZARD_INFO.other;
-export const hazardLabel = (h: Hazard): string => hazardInfo(h).label;
 export const responseMode = (h: Hazard): ResponseMode => hazardInfo(h).response;
+
+/**
+ * The hazard's name in the user's language.
+ *
+ * Prefer this over `hazardInfo(h).label` everywhere the string is shown. The
+ * `label` and `rationale` fields above are the English source text — they stay
+ * on the table so it reads as documentation, but they are not display strings.
+ * The hazard key IS the message key, so a hazard added to the union without a
+ * catalogue entry fails the type check rather than rendering in English.
+ */
+export const hazardLabel = (h: Hazard): string =>
+  tActive(`hazard.${h in HAZARD_INFO ? h : 'other'}.label`);
+
+export const hazardRationale = (h: Hazard): string =>
+  tActive(`hazard.${h in HAZARD_INFO ? h : 'other'}.rationale`);

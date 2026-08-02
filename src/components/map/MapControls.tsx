@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Layers, Navigation, Mic, MicOff, Camera, AlertTriangle } from 'lucide-react';
+import { useT } from '@/i18n/context';
 
 interface MapControlsProps {
   mapLayer: string;
@@ -17,6 +18,7 @@ export function MapControls({
   mapLayer, onSelectLayer, onRecenter, voiceAssistant, onToggleVoice,
   cameraMode, onToggleCamera, onTriggerAlert, isSimulating
 }: MapControlsProps) {
+  const t = useT();
   const [showLayerMenu, setShowLayerMenu] = useState(false);
 
   return (
@@ -30,7 +32,7 @@ export function MapControls({
               ? 'bg-indigo-600 border-indigo-400 text-white'
               : 'bg-white/85 backdrop-blur border-slate-200 text-slate-600 hover:text-slate-900'
           }`}
-          title="Map Layers"
+          title={t('controls.layers')}
         >
           <Layers className="w-4 h-4" />
         </button>
@@ -39,10 +41,10 @@ export function MapControls({
         {showLayerMenu && (
           <div className="absolute right-11 top-0 bg-white/95 backdrop-blur border border-slate-200 rounded-xl p-2 shadow-2xl flex flex-col gap-1.5 min-w-[120px] animate-in fade-in zoom-in-95 duration-200">
             {[
-              { id: 'streets', label: 'Vector Map' },
-              { id: 'satellite', label: 'Satellite' },
-              { id: 'traffic', label: 'Live Traffic' },
-              { id: 'hazard', label: 'Hazard Feed' }
+              { id: 'streets', label: t('layer.streets') },
+              { id: 'satellite', label: t('layer.satellite') },
+              { id: 'traffic', label: t('layer.traffic') },
+              { id: 'hazard', label: t('layer.hazard') }
             ].map((layer) => (
               <button
                 key={layer.id}
@@ -67,7 +69,7 @@ export function MapControls({
       <button
         onClick={onRecenter}
         className="w-9 h-9 rounded-xl bg-white/85 backdrop-blur border border-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center shadow-lg active:scale-95 transition"
-        title="Recenter Map"
+        title={t('controls.recenter')}
       >
         <Navigation className="w-4 h-4 transform rotate-45" />
       </button>
@@ -80,7 +82,7 @@ export function MapControls({
             ? 'bg-emerald-600 border-emerald-400 text-white animate-pulse'
             : 'bg-white/85 backdrop-blur border-slate-200 text-slate-600 hover:text-slate-900'
         }`}
-        title="Audio Co-pilot Guidance"
+        title={t('controls.voice')}
       >
         {voiceAssistant ? <Mic className="w-4 h-4 animate-pulse" /> : <MicOff className="w-4 h-4" />}
       </button>
@@ -93,7 +95,7 @@ export function MapControls({
             ? 'bg-violet-600 border-violet-400 text-white'
             : 'bg-white/85 backdrop-blur border-slate-200 text-slate-600 hover:text-slate-900'
         }`}
-        title="AR Camera View"
+        title={t('controls.camera')}
       >
         <Camera className="w-4 h-4" />
       </button>
@@ -103,7 +105,7 @@ export function MapControls({
         onClick={onTriggerAlert}
         disabled={isSimulating}
         className="w-10 h-10 rounded-xl bg-red-600 hover:bg-red-500 text-white border border-red-400 flex items-center justify-center shadow-lg active:scale-95 disabled:opacity-45 disabled:pointer-events-none transition relative group"
-        title="Trigger Emergency Advisory"
+        title={t('controls.sos')}
       >
         <span className="absolute inset-0 rounded-xl bg-red-600 animate-ping opacity-30 group-hover:opacity-40" />
         <AlertTriangle className="w-4.5 h-4.5 text-white animate-pulse relative z-10" />

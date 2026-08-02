@@ -1,5 +1,6 @@
 import type { Hazard } from '../types/domain';
 import type { LatLng } from './geolocation';
+import { getActiveLanguage } from '@/i18n/context';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Live hazard discovery.
@@ -35,6 +36,18 @@ export interface LiveHazard {
   hazard: Hazard;
   source: string;
   headline: string;
+  /**
+   * The same headline as published in Japanese, when the feed carries one.
+   *
+   * JMA sends both renderings — `anm`/`ttl` for quakes and tsunami, `name.jp`
+   * for cyclones — and this used to read the English field and throw the
+   * Japanese away, so a Japanese user was shown "TY Dolphin (T2613)" when the
+   * feed had literally handed us 台風13号. USGS and GDACS are English-only, so
+   * this stays undefined for them and callers fall back to `headline`.
+   */
+  headlineJa?: string;
+  /** Issuing source named in Japanese, where the source is a Japanese agency. */
+  sourceJa?: string;
   bulletinJa?: string;
   bulletinEn?: string;
   /** ISO timestamp of the event / bulletin issue. */
@@ -147,12 +160,15 @@ async function fetchJmaQuakes(): Promise<LiveHazard[]> {
     const geo = parseJmaCod(entry.cod);
     const mag = entry.mag ? parseFloat(entry.mag) : undefined;
     const place = entry.en_anm || entry.anm || 'unknown epicentre';
+    const placeJa = entry.anm || entry.en_anm || '不明';
     const shindo = entry.maxi || undefined;
     return [{
       id: `jma-quake-${entry.eid ?? when}`,
       hazard: 'earthquake' as Hazard,
       source: 'JMA (気象庁) earthquake feed',
       headline: `M${entry.mag ?? '?.?'} earthquake near ${place}${shindo ? `, max JMA intensity ${shindo}` : ''}`,
+      headlineJa: `${placeJa}付近でM${entry.mag ?? '?.?'}の地震${shindo ? `、最大震度${shindo}` : ''}`,
+      sourceJa: '気象庁 地震情報',
       bulletinJa: `${entry.ttl ?? '地震情報'}：${entry.anm ?? ''}付近でマグニチュード${entry.mag ?? '?.?'}の地震。最大震度${shindo ?? '不明'}。`,
       bulletinEn: `${entry.ttl ?? 'Earthquake'} near ${place}. Magnitude ${entry.mag ?? '?.?'}, max JMA intensity ${shindo ?? 'N/A'}.`,
       occurredAt: new Date(when).toISOString(),
@@ -228,11 +244,14 @@ async function fetchJmaTsunami(): Promise<LiveHazard[]> {
     const codes = (entry.kind ?? []).map((k) => k.code ?? '').filter(Boolean);
     const text = (entry.kind ?? []).map((k) => k.kind ?? '').filter(Boolean).join(' / ');
     const place = entry.en_anm || entry.anm || 'unknown source region';
+    const placeJa = entry.anm || entry.en_anm || '不明';
     return [{
       id: `jma-tsunami-${entry.eid ?? when}`,
       hazard: 'tsunami' as Hazard,
       source: 'JMA (気象庁) tsunami feed',
       headline: `${text || 'Tsunami information'} — source region ${place}`,
+      headlineJa: `${text || '津波情報'} — 津波予報区：${placeJa}`,
+      sourceJa: '気象庁 津波情報',
       bulletinJa: `${entry.ttl ?? '津波情報'}：${entry.anm ?? ''}。${text}`,
       bulletinEn: `${entry.ttl ?? 'Tsunami information'} for the ${place} source region. ${text}`,
       occurredAt: new Date(when).toISOString(),
@@ -320,6 +339,10 @@ async function fetchJmaTyphoons(): Promise<LiveHazard[]> {
         source: 'JMA (気象庁) tropical cyclone feed',
         headline: `${categoryEn} ${nameEn}${t.typhoonNumber ? ` (T${t.typhoonNumber})` : ''}` +
           `${Number.isFinite(sustained) ? `, sustained ${sustained} m/s` : ''}`,
+        headlineJa: `${t.typhoonNumber ? `台風${Number(t.typhoonNumber) % 100}号` : '台風'}` +
+          `${nameJa ? `（${nameJa}）` : ''}` +
+          `${Number.isFinite(sustained) ? ` 最大風速${sustained}m/s` : ''}`,
+        sourceJa: '気象庁 台風情報',
         bulletinJa: `${nameJa ? `台風「${nameJa}」` : '台風'}。中心気圧付近の最大風速${Number.isFinite(sustained) ? `${sustained}m/s` : '不明'}、最大瞬間風速${Number.isFinite(gust) ? `${gust}m/s` : '不明'}。`,
         bulletinEn: `${categoryEn} ${nameEn} — sustained winds ${Number.isFinite(sustained) ? `${sustained} m/s` : 'unknown'}, gusts ${Number.isFinite(gust) ? `${gust} m/s` : 'unknown'}.`,
         occurredAt: new Date(issued).toISOString(),
@@ -560,3 +583,20 @@ const roughKm = (a: LatLng, b: LatLng): number => {
     Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * 6371 * Math.asin(Math.sqrt(h));
 };
+
+// ── Language-aware rendering ─────────────────────────────────────────────────
+
+/**
+ * The headline to show, in the language the app is displaying.
+ *
+ * Only JMA publishes a Japanese rendering; USGS and GDACS are English-only, so
+ * for those this returns the English text whatever the UI language is. That is
+ * deliberate — inventing a translation of a foreign place name would make the
+ * quoted bulletin no longer match what the agency actually issued.
+ */
+export const hazardHeadline = (h: LiveHazard): string =>
+  (getActiveLanguage() === 'Japanese' && h.headlineJa) || h.headline;
+
+/** The issuing source, named in Japanese where the agency publishes one. */
+export const hazardSource = (h: LiveHazard): string =>
+  (getActiveLanguage() === 'Japanese' && h.sourceJa) || h.source;

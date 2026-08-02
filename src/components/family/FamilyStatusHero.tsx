@@ -1,7 +1,8 @@
 import { ShieldCheck, Radar, WifiOff, AlertTriangle, Shield } from 'lucide-react';
 import type { FamilyStatus } from '@/lib/familyStatus';
 import type { ThreatScanState } from '@/lib/impact';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardLabel } from '@/constants/hazards';
+import { useT } from '@/i18n/context';
 
 interface FamilyStatusHeroProps {
   memberCount: number;
@@ -24,64 +25,72 @@ interface FamilyStatusHeroProps {
 // places, not people — a distinction the footer of this screen spells out — and
 // "secure" asserts something about the people themselves.
 export function FamilyStatusHero({ memberCount, familyStatus, scanStatus, scannedAt }: FamilyStatusHeroProps) {
+  const t = useT();
   const atRisk = (familyStatus ?? []).filter((f) => f.impact.affected);
-  const hazard = atRisk[0] ? hazardInfo(atRisk[0].impact.hazard) : null;
+  const hazardName = atRisk[0] ? hazardLabel(atRisk[0].impact.hazard) : '';
 
+  // Every line below is phrased so no singular/plural branch is needed. The
+  // previous version chose between "place"/"places" and "falls"/"fall" inline,
+  // which is untranslatable: Japanese, Chinese and Vietnamese have no such
+  // agreement, so those branches could only ever produce English grammar.
   const state = (() => {
     if (memberCount === 0) {
       return {
-        badge: 'Nobody added', Icon: Shield,
+        badge: t('hero.badge.nobody'), Icon: Shield,
         tone: 'bg-slate-100 border-slate-200', pill: 'bg-slate-200 text-slate-600',
         icon: 'bg-slate-200 text-slate-500', body: 'text-slate-600',
-        line: 'Add the people you would check on first, and where you expect them to be. Their places are then tested against every hazard the app detects.'
+        line: t('hero.line.nobody')
       };
     }
     if (scanStatus === 'scanning') {
       return {
-        badge: 'Checking', Icon: Radar,
+        badge: t('hero.badge.checking'), Icon: Radar,
         tone: 'bg-indigo-50 border-indigo-200', pill: 'bg-indigo-200/70 text-indigo-800',
         icon: 'bg-indigo-600 text-white', body: 'text-indigo-900/80',
-        line: `Testing ${memberCount} recorded ${memberCount === 1 ? 'place' : 'places'} against the live hazard feeds.`
+        line: t('hero.line.checking')
       };
     }
     if (scanStatus === 'unavailable') {
       return {
-        badge: 'Unknown', Icon: WifiOff,
+        badge: t('hero.badge.unknown'), Icon: WifiOff,
         tone: 'bg-amber-50 border-amber-300', pill: 'bg-amber-200/70 text-amber-900',
         icon: 'bg-amber-500 text-white', body: 'text-amber-900/80',
-        line: 'No hazard feed could be reached, so these places could not be judged. This is not an all-clear — retry once you have a connection.'
+        line: t('hero.line.unknown')
       };
     }
     if (atRisk.length > 0) {
-      const names = atRisk.map((f) => `${f.member.name} at ${f.member.place.name}`).join('; ');
+      const names = atRisk.map((f) => `${f.member.name} — ${f.member.place.name}`).join('; ');
       return {
-        badge: `${atRisk.length} in area`, Icon: AlertTriangle,
+        badge: t('hero.badge.inArea', { count: atRisk.length }), Icon: AlertTriangle,
         tone: 'bg-red-50 border-red-300', pill: 'bg-red-200/70 text-red-900',
         icon: 'bg-red-600 text-white', body: 'text-red-900/80',
-        line: `${atRisk.length} of ${memberCount} recorded ${memberCount === 1 ? 'place' : 'places'} ${atRisk.length === 1 ? 'falls' : 'fall'} inside the ${hazard?.label.toLowerCase() ?? 'hazard'} affected area: ${names}.`
+        line: t('hero.line.inArea', {
+          names, count: atRisk.length, total: memberCount,
+          hazard: hazardName.toLowerCase()
+        })
       };
     }
     if (familyStatus !== null) {
       return {
-        badge: 'All clear', Icon: ShieldCheck,
+        badge: t('hero.badge.allClear'), Icon: ShieldCheck,
         tone: 'bg-emerald-50 border-emerald-300', pill: 'bg-emerald-200/70 text-emerald-900',
         icon: 'bg-emerald-600 text-white', body: 'text-emerald-900/80',
-        line: `None of the ${memberCount} recorded ${memberCount === 1 ? 'place' : 'places'} ${memberCount === 1 ? 'falls' : 'fall'} inside the ${hazard?.label.toLowerCase() ?? 'detected'} affected area.`
+        line: t('hero.line.allClearAssessed', { hazard: hazardName.toLowerCase() })
       };
     }
     if (scanStatus === 'clear') {
       return {
-        badge: 'All clear', Icon: ShieldCheck,
+        badge: t('hero.badge.allClear'), Icon: ShieldCheck,
         tone: 'bg-emerald-50 border-emerald-300', pill: 'bg-emerald-200/70 text-emerald-900',
         icon: 'bg-emerald-600 text-white', body: 'text-emerald-900/80',
-        line: `No active hazard reaches you, so there is nothing for these ${memberCount === 1 ? 'place' : 'places'} to be inside.`
+        line: t('hero.line.allClearNoHazard')
       };
     }
     return {
-      badge: 'Not checked', Icon: Shield,
+      badge: t('hero.badge.notChecked'), Icon: Shield,
       tone: 'bg-indigo-50 border-indigo-200', pill: 'bg-indigo-200/70 text-indigo-800',
       icon: 'bg-indigo-600 text-white', body: 'text-indigo-900/80',
-      line: `${memberCount} ${memberCount === 1 ? 'place' : 'places'} on file. Run a safety check and each one is tested against whatever the live feeds report.`
+      line: t('hero.line.notChecked', { count: memberCount })
     };
   })();
 
@@ -89,9 +98,9 @@ export function FamilyStatusHero({ memberCount, familyStatus, scanStatus, scanne
     if (!scannedAt) return null;
     const mins = Math.max(0, (Date.now() - Date.parse(scannedAt)) / 60_000);
     if (!Number.isFinite(mins)) return null;
-    if (mins < 1) return 'checked just now';
-    if (mins < 60) return `checked ${Math.round(mins)} min ago`;
-    return `checked ${(mins / 60).toFixed(1)} h ago`;
+    if (mins < 1) return t('hero.asOf.justNow');
+    if (mins < 60) return t('hero.asOf.minutes', { n: Math.round(mins) });
+    return t('hero.asOf.hours', { n: (mins / 60).toFixed(1) });
   })();
 
   return (
@@ -103,7 +112,7 @@ export function FamilyStatusHero({ memberCount, familyStatus, scanStatus, scanne
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="text-[15px] font-black text-slate-900 tracking-tight leading-tight">Family status</h2>
+              <h2 className="text-[15px] font-black text-slate-900 tracking-tight leading-tight">{t('hero.title')}</h2>
               {asOf && <p className="text-[9px] font-mono text-slate-500 mt-0.5">{asOf}</p>}
             </div>
             <span className={`shrink-0 text-[9.5px] font-black uppercase tracking-wide px-2.5 py-1 rounded-full ${state.pill}`}>

@@ -2,6 +2,7 @@ import type { Hazard, ResponseMode } from '../types/domain';
 import { hazardInfo, responseMode } from '../constants/hazards';
 import type { LatLng } from '../services/geolocation';
 import type { LiveHazard } from '../services/alerts';
+import { tActive } from '@/i18n/context';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Does this hazard actually reach *this* user?
@@ -102,7 +103,9 @@ const SEVERITY_RANK: Record<Severity, number> = {
 
 export const fmtKm = (km: number) => (km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`);
 export const fmtAge = (min: number) =>
-  min < 1 ? 'just now' : min < 60 ? `${Math.round(min)} min ago` : `${(min / 60).toFixed(1)} h ago`;
+  min < 1 ? tActive('time.justNow')
+    : min < 60 ? tActive('time.minutesAgo', { n: Math.round(min) })
+    : tActive('time.hoursAgo', { n: (min / 60).toFixed(1) });
 
 // ── Earthquake ───────────────────────────────────────────────────────────────
 

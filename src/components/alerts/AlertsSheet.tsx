@@ -1,7 +1,10 @@
 import { Radar, WifiOff, AlertTriangle, Footprints, Home, Eye, MapPin, Clock } from 'lucide-react';
 import type { ThreatScanState, Severity } from '@/lib/impact';
+import { hazardHeadline, hazardSource } from '@/services/alerts';
 import { fmtAge, fmtKm } from '@/lib/impact';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardInfo, hazardLabel } from '@/constants/hazards';
+import { useT } from '@/i18n/context';
+import type { MessageKey } from '@/i18n/messages';
 
 interface AlertsSheetProps {
   show: boolean;
@@ -18,10 +21,10 @@ const SEVERITY_STYLE: Record<Severity, string> = {
   none: 'bg-slate-50 border-slate-200 text-slate-600'
 };
 
-const RESPONSE_LABEL: Record<string, { text: string; Icon: typeof Footprints }> = {
-  evacuate: { text: 'Evacuate', Icon: Footprints },
-  shelter_in_place: { text: 'Shelter in place', Icon: Home },
-  monitor: { text: 'Monitor', Icon: Eye }
+const RESPONSE_LABEL: Record<string, { key: MessageKey; Icon: typeof Footprints }> = {
+  evacuate: { key: 'response.evacuate', Icon: Footprints },
+  shelter_in_place: { key: 'response.shelter_in_place', Icon: Home },
+  monitor: { key: 'response.monitor', Icon: Eye }
 };
 
 // A list of every event the last scan actually found (evaluateThreats' `all`,
@@ -30,6 +33,7 @@ const RESPONSE_LABEL: Record<string, { text: string; Icon: typeof Footprints }> 
 // assessImpact(); there is no confidence score, crowd-validation count, or
 // duration estimate here because this app has no model that produces one.
 export function AlertsSheet({ show, threatScan, isSimulating, onRescan }: AlertsSheetProps) {
+  const t = useT();
   if (!show) return null;
 
   // Newest first, so the page reads as a timeline.
@@ -64,8 +68,8 @@ export function AlertsSheet({ show, threatScan, isSimulating, onRescan }: Alerts
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-500" />
             <div>
-              <h3 className="text-sm font-black text-slate-900 leading-tight">Live Alerts</h3>
-              <p className="text-[9.5px] text-slate-500 font-mono">Live updates in your area</p>
+              <h3 className="text-sm font-black text-slate-900 leading-tight">{t('alerts.title')}</h3>
+              <p className="text-[9.5px] text-slate-500 font-mono">{t('alerts.subtitle')}</p>
             </div>
           </div>
           {/* Rescan is the only header control — there is no close button.
@@ -79,10 +83,10 @@ export function AlertsSheet({ show, threatScan, isSimulating, onRescan }: Alerts
             onClick={onRescan}
             disabled={isSimulating}
             className="flex items-center gap-1 pl-2 pr-2.5 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-600 disabled:opacity-45 disabled:pointer-events-none transition active:scale-95"
-            title="Rescan hazard feeds"
+            title={t('alerts.rescanTitle')}
           >
             <Radar className={`w-3.5 h-3.5 ${isSimulating ? 'animate-spin' : ''}`} style={{ animationDuration: '2.5s' }} />
-            <span className="text-[9.5px] font-black uppercase tracking-wide">{isSimulating ? 'Scanning' : 'Rescan'}</span>
+            <span className="text-[9.5px] font-black uppercase tracking-wide">{isSimulating ? t('alerts.rescanning') : t('alerts.rescan')}</span>
           </button>
         </div>
 
@@ -91,25 +95,25 @@ export function AlertsSheet({ show, threatScan, isSimulating, onRescan }: Alerts
             <div className="py-8 text-center space-y-3">
               <Radar className="w-8 h-8 text-slate-300 mx-auto" />
               <p className="text-[11px] text-slate-500 font-mono leading-relaxed max-w-[240px] mx-auto">
-                No scan yet. Run a safety check to see live events near you.
+                {t('alerts.noScan')}
               </p>
             </div>
           ) : threatScan.status === 'scanning' ? (
             <div className="py-8 text-center space-y-3">
               <Radar className="w-8 h-8 text-indigo-500 mx-auto animate-spin" style={{ animationDuration: '2.5s' }} />
-              <p className="text-[11px] text-slate-500 font-mono">Scanning live hazard feeds…</p>
+              <p className="text-[11px] text-slate-500 font-mono">{t('alerts.scanningBody')}</p>
             </div>
           ) : threatScan.status === 'unavailable' ? (
             <div className="py-8 text-center space-y-3">
               <WifiOff className="w-8 h-8 text-amber-500 mx-auto" />
               <p className="text-[11px] text-amber-800/90 font-mono leading-relaxed max-w-[260px] mx-auto">
-                No hazard feed could be reached, so this is not an all-clear. Retry once you have a connection.
+                {t('alerts.unavailable')}
               </p>
             </div>
           ) : events.length === 0 ? (
             <div className="py-8 text-center space-y-3">
               <AlertTriangle className="w-8 h-8 text-slate-300 mx-auto" />
-              <p className="text-[11px] text-slate-500 font-mono">No recent events found near you.</p>
+              <p className="text-[11px] text-slate-500 font-mono">{t('alerts.none')}</p>
             </div>
           ) : (
             events.map(({ hazard, impact }) => {
@@ -123,34 +127,36 @@ export function AlertsSheet({ show, threatScan, isSimulating, onRescan }: Alerts
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[10.5px] font-extrabold tracking-wider uppercase flex items-center gap-1.5">
                       <span>{info.emoji}</span>
-                      {impact.severity === 'none' ? info.label : `${impact.severity} ${info.label}`}
+                      {`${t(`severity.${impact.severity}`)} ${hazardLabel(hazard.hazard)}`.trim()}
                     </span>
                     {impact.affected && (
                       <span className="text-[9px] font-black uppercase tracking-wide bg-white/60 px-2 py-0.5 rounded-md shrink-0">
-                        Acting on this
+                        {t('alerts.actingOnThis')}
                       </span>
                     )}
                   </div>
 
-                  <p className="text-[11px] font-mono leading-snug break-words">{hazard.headline}</p>
+                  <p className="text-[11px] font-mono leading-snug break-words">{hazardHeadline(hazard)}</p>
 
                   {impact.affected && (
                     <div className="flex items-center gap-1.5 bg-white/60 rounded-xl px-2.5 py-1.5">
                       <response.Icon className="w-3.5 h-3.5 shrink-0" />
-                      <span className="text-[10.5px] font-black uppercase tracking-wide">{response.text}</span>
+                      <span className="text-[10.5px] font-black uppercase tracking-wide">{t(response.key)}</span>
                     </div>
                   )}
 
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-mono opacity-80">
                     <span className="flex items-center gap-1">
                       <MapPin className="w-3 h-3" />
-                      {impact.distanceKm !== null ? `${fmtKm(impact.distanceKm)} away` : 'distance unknown'}
+                      {impact.distanceKm !== null
+                        ? t('alerts.away', { distance: fmtKm(impact.distanceKm) })
+                        : t('alerts.distanceUnknown')}
                     </span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {fmtAge(impact.ageMinutes)}
                     </span>
-                    <span>{hazard.source}</span>
+                    <span>{hazardSource(hazard)}</span>
                   </div>
                 </div>
               );
