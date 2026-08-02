@@ -98,29 +98,25 @@ export function HomeScreen({
         card is never left tucked underneath it. */}
     <div className="absolute inset-0 overflow-y-auto pb-[calc(var(--nav-h)+1rem)] scrollbar-none bg-white">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200 px-4 pt-[max(0.75rem,var(--safe-top))] pb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Shield className="w-5 h-5 text-indigo-500" />
-          <span className="text-sm font-black text-slate-900 tracking-tight">SafeRoute AI</span>
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200 px-4 pt-[max(0.75rem,var(--safe-top))] pb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Shield className="w-5 h-5 text-indigo-500 shrink-0" />
+          <span className="text-sm font-black text-slate-900 tracking-tight truncate">SafeRoute AI</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Language chip — one tap cycles language, visible at a glance for
-              foreign residents/tourists rather than buried in Settings. */}
+              foreign residents/tourists rather than buried in Settings. Takes
+              the header slot the redundant SOS button used to hold (SOS is
+              still reachable via the body "Run Safety Check" action and the
+              in-navigation SOS), so nothing has to compete for width. */}
           <button
             onClick={cycleLanguage}
-            className="h-8 px-2.5 rounded-full bg-slate-100 border border-slate-200 flex items-center gap-1 text-[10.5px] font-black text-slate-600 active:scale-95 transition"
+            className="h-8 pl-2.5 pr-3 rounded-full bg-indigo-50 border border-indigo-200 flex items-center gap-1.5 shrink-0 active:scale-95 transition"
             title={t('profile.language')}
             aria-label={`Language: ${language}. Tap to change.`}
           >
-            <Languages className="w-3.5 h-3.5 text-indigo-500" />
-            {LANG_SHORT[language]}
-          </button>
-          <button
-            onClick={onTriggerAlert}
-            disabled={isSimulating}
-            className="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full text-[10.5px] font-black uppercase tracking-wide shadow-lg active:scale-95 disabled:opacity-45 disabled:pointer-events-none transition"
-          >
-            SOS
+            <Languages className="w-4 h-4 text-indigo-500 shrink-0" />
+            <span className="text-[11px] font-black text-indigo-600 leading-none">{LANG_SHORT[language]}</span>
           </button>
           {/* Only settings entry point reachable from Home — previously this
               (floor/mobility/language, sign-out) was only reachable from a
