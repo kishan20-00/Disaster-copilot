@@ -28,3 +28,31 @@ export const useT = () => useContext(LanguageContext).t;
 
 /** The active language itself, for the few places that need to branch on it. */
 export const useLanguage = () => useContext(LanguageContext).language;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Module-level translator, for pure functions.
+//
+// Components must use useT(). This exists for the code that CANNOT: the hazard
+// table, the impact assessor, the verdict builder and the time formatters are
+// plain functions called from services and hooks as well as from render, and
+// threading a `t` parameter through every one of them would change a dozen
+// signatures to carry something none of them conceptually own.
+//
+// LanguageProvider keeps this in sync during render, before any child renders,
+// so a component reading it can never see a stale language.
+// ─────────────────────────────────────────────────────────────────────────────
+
+let activeLanguage: Language = 'English';
+
+export function setActiveLanguage(lang: Language): void {
+  activeLanguage = lang;
+}
+
+export function getActiveLanguage(): Language {
+  return activeLanguage;
+}
+
+/** Translate in whatever language the app is currently showing. */
+export function tActive(key: MessageKey, vars?: MessageVars): string {
+  return translate(activeLanguage, key, vars);
+}

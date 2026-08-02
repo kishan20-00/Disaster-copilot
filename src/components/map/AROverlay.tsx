@@ -2,7 +2,7 @@ import type { RefObject } from 'react';
 import { Navigation } from 'lucide-react';
 import type { ActionStep, Hazard } from '@/types/domain';
 import type { WalkingRoute } from '@/services/maps';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardInfo, hazardLabel } from '@/constants/hazards';
 import { useT } from '@/i18n/context';
 
 interface AROverlayProps {
@@ -53,7 +53,7 @@ export function AROverlay({
                 all twelve. The label itself is still English until the table is
                 localized — see the i18n phase notes. */}
             <span className="text-white font-black text-xs uppercase tracking-widest">
-              {hazard.emoji} {hazard.label} {t('ar.alertSuffix')}
+              {hazard.emoji} {hazardLabel(activeHazard)} {t('ar.alertSuffix')}
             </span>
           </div>
         )}

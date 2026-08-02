@@ -1,5 +1,6 @@
 import type { FamilyMember } from '@/lib/familyStore';
 import type { ImpactAssessment, Severity, ThreatScanState } from '@/lib/impact';
+import { tActive } from '@/i18n/context';
 
 // One family member's place, judged against the hazard from the current run.
 //
@@ -96,7 +97,9 @@ export function familyVerdict(
   if (impact) {
     if (impact.affected) {
       return {
-        label: 'In affected area',
+        label: tActive('verdict.inArea'),
+        // `basis` is still English — it is composed by string concatenation in
+        // lib/impact and has not been converted to parameterised messages yet.
         note: impact.basis,
         atRisk: true,
         // An affected place always shows at least one segment, even if the
@@ -106,32 +109,31 @@ export function familyVerdict(
       };
     }
     return {
-      label: 'Outside area', note: impact.basis, atRisk: false,
+      label: tActive('verdict.outside'), note: impact.basis, atRisk: false,
       severityLevel: SEVERITY_LEVEL[impact.severity], tone: TONES.clear
     };
   }
 
   if (scanStatus === 'scanning') {
     return {
-      label: 'Checking…', note: 'Checking this place against the live hazard feeds.',
+      label: tActive('verdict.checking'), note: tActive('verdict.checkingNote'),
       atRisk: false, severityLevel: 0, tone: TONES.busy
     };
   }
   if (scanStatus === 'clear') {
     return {
-      label: 'No hazard', note: 'No active hazard, so there is nothing for this place to be inside.',
+      label: tActive('verdict.noHazard'), note: tActive('verdict.noHazardNote'),
       atRisk: false, severityLevel: 0, tone: TONES.clear
     };
   }
   if (scanStatus === 'unavailable') {
     return {
-      label: 'Unknown',
-      note: 'Hazard feeds could not be reached, so this place could not be judged. This is not an all-clear.',
+      label: tActive('verdict.unknown'), note: tActive('verdict.unknownNote'),
       atRisk: false, severityLevel: 0, tone: TONES.unknown
     };
   }
   return {
-    label: 'Not checked', note: 'Run a safety check to test this place against live hazards.',
+    label: tActive('verdict.unchecked'), note: tActive('verdict.uncheckedNote'),
     atRisk: false, severityLevel: 0, tone: TONES.idle
   };
 }

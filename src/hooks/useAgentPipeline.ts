@@ -3,7 +3,7 @@ import type { ActionStep, AgentState, Hazard, HazardSignal, PersonalContext } fr
 import type { LatLng } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
 import { getWalkingRoute, reverseGeocode } from '@/services/maps';
-import { scanForHazards } from '@/services/alerts';
+import { scanForHazards, hazardHeadline, hazardSource } from '@/services/alerts';
 import { fetchDesignatedShelters } from '@/services/shelters';
 import { responseMode, hazardInfo } from '@/constants/hazards';
 import { evaluateThreats, assessImpact } from '@/lib/impact';
@@ -217,12 +217,16 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
 
         const signal: HazardSignal = {
           hazard,
-          headline: detected.hazard.headline,
+          // Rendered in the language active when the scan ran. A later language
+          // change does not retranslate an already-issued signal; the next scan
+          // does. Retranslating a bulletin after the fact would mean the text on
+          // screen no longer matched the moment it was issued.
+          headline: hazardHeadline(detected.hazard),
           bulletinJa: detected.hazard.bulletinJa ?? detected.hazard.headline,
           bulletinEn: detected.hazard.bulletinEn ?? detected.hazard.headline,
           magnitude: detected.hazard.magnitude,
           intensity: detected.hazard.observedShindo,
-          source: detected.hazard.source
+          source: hazardSource(detected.hazard)
         };
         setHazardSignal(signal);
 

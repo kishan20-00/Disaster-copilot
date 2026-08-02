@@ -1,7 +1,7 @@
 import { ShieldCheck, Radar, WifiOff, AlertTriangle, Shield } from 'lucide-react';
 import type { FamilyStatus } from '@/lib/familyStatus';
 import type { ThreatScanState } from '@/lib/impact';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardLabel } from '@/constants/hazards';
 import { useT } from '@/i18n/context';
 
 interface FamilyStatusHeroProps {
@@ -27,7 +27,7 @@ interface FamilyStatusHeroProps {
 export function FamilyStatusHero({ memberCount, familyStatus, scanStatus, scannedAt }: FamilyStatusHeroProps) {
   const t = useT();
   const atRisk = (familyStatus ?? []).filter((f) => f.impact.affected);
-  const hazard = atRisk[0] ? hazardInfo(atRisk[0].impact.hazard) : null;
+  const hazardName = atRisk[0] ? hazardLabel(atRisk[0].impact.hazard) : '';
 
   // Every line below is phrased so no singular/plural branch is needed. The
   // previous version chose between "place"/"places" and "falls"/"fall" inline,
@@ -66,7 +66,7 @@ export function FamilyStatusHero({ memberCount, familyStatus, scanStatus, scanne
         icon: 'bg-red-600 text-white', body: 'text-red-900/80',
         line: t('hero.line.inArea', {
           names, count: atRisk.length, total: memberCount,
-          hazard: hazard?.label.toLowerCase() ?? ''
+          hazard: hazardName.toLowerCase()
         })
       };
     }
@@ -75,7 +75,7 @@ export function FamilyStatusHero({ memberCount, familyStatus, scanStatus, scanne
         badge: t('hero.badge.allClear'), Icon: ShieldCheck,
         tone: 'bg-emerald-50 border-emerald-300', pill: 'bg-emerald-200/70 text-emerald-900',
         icon: 'bg-emerald-600 text-white', body: 'text-emerald-900/80',
-        line: t('hero.line.allClearAssessed', { hazard: hazard?.label.toLowerCase() ?? '' })
+        line: t('hero.line.allClearAssessed', { hazard: hazardName.toLowerCase() })
       };
     }
     if (scanStatus === 'clear') {

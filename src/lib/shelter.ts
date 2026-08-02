@@ -3,7 +3,7 @@ import type { Hazard } from '@/types/domain';
 import { findNearestShelter, formatDistance, haversineMeters } from '@/services/maps';
 import type { DesignatedShelter } from '@/services/shelters';
 import type { HazardInfo } from '@/constants/hazards';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardInfo, hazardLabel, hazardRationale } from '@/constants/hazards';
 
 export interface ShelterInfo {
   name: string;
@@ -133,8 +133,8 @@ export function pickSafestShelter(
       certifiedFor: best.s.certifiedFor,
       source: best.s.source,
       rationale:
-        `Officially designated for ${info.label.toLowerCase()}` +
-        (certified.length > 1 ? ` (also certified for ${certified.filter((c) => c !== info.label.toLowerCase()).join(', ')})` : '') +
+        `Officially designated for ${hazardLabel(hazard).toLowerCase()}` +
+        (certified.length > 1 ? ` (also certified for ${certified.filter((c) => c !== hazardLabel(hazard).toLowerCase()).join(', ')})` : '') +
         `. ${ranked.length} certified site(s) nearby; this is the closest.`
     };
   }
@@ -187,7 +187,7 @@ export function pickSafestShelter(
     source: 'Google Places (no official shelter register available here)',
     rationale:
       `No official shelter register covers this area, so this is a best guess from nearby places — ` +
-      `not a designated shelter. Chosen because ${info.label.toLowerCase()} calls for ${info.rationale.toLowerCase()}` +
+      `not a designated shelter. Chosen because ${hazardLabel(hazard).toLowerCase()} calls for ${hazardRationale(hazard).toLowerCase()}` +
       (tradedUp ? ` It was preferred over the closer ${closest.m.name}.` : '')
   };
 }

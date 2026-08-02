@@ -4,7 +4,7 @@ import { describeAge } from '@/lib/familyStore';
 import type { ImpactAssessment, ThreatScanState } from '@/lib/impact';
 import { fmtKm } from '@/lib/impact';
 import { familyVerdict } from '@/lib/familyStatus';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardInfo, hazardLabel } from '@/constants/hazards';
 import type { LatLng } from '@/services/geolocation';
 import { haversineMeters } from '@/services/maps';
 import { useT } from '@/i18n/context';
@@ -114,10 +114,10 @@ export function FamilyMemberCard({
           <Chip Icon={MapPin} label={t('card.fromYou')} value={fromYou ?? '—'} />
           <Chip
             Icon={Crosshair}
-            label={hazard ? t('card.fromHazard', { hazard: hazard.label.toLowerCase() }) : t('card.fromHazardGeneric')}
+            label={impact ? t('card.fromHazard', { hazard: hazardLabel(impact.hazard).toLowerCase() }) : t('card.fromHazardGeneric')}
             value={impact?.distanceKm != null ? fmtKm(impact.distanceKm) : '—'}
           />
-          <Chip Icon={Clock} label={t('card.recorded')} value={describeAge(member.addedAt).replace(/^added /, '')} />
+          <Chip Icon={Clock} label={t('card.recorded')} value={describeAge(member.addedAt)} />
         </div>
 
         {/* ── Severity meter ──

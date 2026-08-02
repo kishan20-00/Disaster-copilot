@@ -1,8 +1,9 @@
 import { Radar, ShieldCheck, AlertTriangle, WifiOff, Clock, MapPin, Home, Footprints, Eye } from 'lucide-react';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardLabel, hazardRationale } from '@/constants/hazards';
 import type { ThreatScanState } from '@/lib/impact';
 import { fmtKm } from '@/lib/impact';
 import { useT } from '@/i18n/context';
+import { hazardHeadline, hazardSource } from '@/services/alerts';
 
 interface ThreatScanPanelProps {
   scan: ThreatScanState | null;
@@ -80,7 +81,7 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
               {t('scan.closest')}
             </span>
             <p className="text-[10.5px] text-slate-800 font-mono leading-snug break-words">
-              {closest.hazard.headline}
+              {hazardHeadline(closest.hazard)}
             </p>
             <p className="text-[9.5px] text-slate-500 font-mono leading-relaxed">{closest.impact.basis}</p>
           </div>
@@ -98,15 +99,14 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
   const worst = scan.verdict?.worst;
   if (!worst) return null;
   const tone = SEVERITY_STYLE[worst.impact.severity] ?? SEVERITY_STYLE.none;
-  const info = hazardInfo(worst.hazard.hazard);
 
   // What to DO is the single most important thing on this card — a typhoon that
   // reaches you means stay inside, not evacuate.
   const action = worst.impact.response === 'evacuate'
-    ? { Icon: Footprints, text: t('scan.evacuateNow'), hint: info.rationale }
+    ? { Icon: Footprints, text: t('scan.evacuateNow'), hint: hazardRationale(worst.hazard.hazard) }
     : worst.impact.response === 'shelter_in_place'
-    ? { Icon: Home, text: t('scan.stayInside'), hint: info.rationale }
-    : { Icon: Eye, text: t('scan.monitorOnly'), hint: info.rationale };
+    ? { Icon: Home, text: t('scan.stayInside'), hint: hazardRationale(worst.hazard.hazard) }
+    : { Icon: Eye, text: t('scan.monitorOnly'), hint: hazardRationale(worst.hazard.hazard) };
 
   return (
     <div className={`border rounded-2xl p-3.5 space-y-2 shadow-lg animate-in fade-in duration-300 ${tone}`}>
@@ -115,7 +115,7 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
           <AlertTriangle className="w-4 h-4 shrink-0 animate-pulse" />
           <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans truncate">
             {t('scan.affectsYou', {
-              hazard: `${t(`severity.${worst.impact.severity}`)} ${info.label}`.trim()
+              hazard: `${t(`severity.${worst.impact.severity}`)} ${hazardLabel(worst.hazard.hazard)}`.trim()
             })}
           </span>
         </div>
@@ -126,7 +126,7 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
         )}
       </div>
 
-      <p className="text-[10.5px] font-mono leading-snug break-words">{worst.hazard.headline}</p>
+      <p className="text-[10.5px] font-mono leading-snug break-words">{hazardHeadline(worst.hazard)}</p>
 
       <div className="flex items-start gap-2 bg-white/60 rounded-xl px-2.5 py-2 border border-current/20">
         <action.Icon className="w-4 h-4 shrink-0 mt-0.5" />
@@ -146,7 +146,7 @@ export function ThreatScanPanel({ scan }: ThreatScanPanelProps) {
         {worst.impact.estimatedMmi !== null && (
           <span>{t('scan.mmi', { value: worst.impact.estimatedMmi.toFixed(1) })}</span>
         )}
-        <span>{worst.hazard.source}</span>
+        <span>{hazardSource(worst.hazard)}</span>
       </div>
 
       <p className="text-[9.5px] font-mono leading-relaxed opacity-90 border-t border-current/15 pt-1.5">

@@ -10,7 +10,8 @@ import type { FamilyStatus } from '@/lib/familyStatus';
 import type { LatLng } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
 import { getShelterInfo } from '@/lib/shelter';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardInfo, hazardLabel } from '@/constants/hazards';
+import { hazardHeadline } from '@/services/alerts';
 import { AgentPipelineConsole } from '@/components/drawer/AgentPipelineConsole';
 import { VoiceFeedPanel } from '@/components/drawer/VoiceFeedPanel';
 import { useT } from '@/i18n/context';
@@ -189,8 +190,8 @@ export function HomeScreen({
         ) : worst ? (
           <section className={`rounded-[28px] p-6 flex flex-col items-center text-center gap-3 border ${hazardInfo(activeHazard).tone}`}>
             <AlertTriangle className="w-12 h-12 animate-pulse" />
-            <h2 className="text-xl font-black">{t('home.detected', { hazard: hazardInfo(activeHazard).label })}</h2>
-            <p className="text-[11px] opacity-90 leading-relaxed max-w-[280px]">{worst.hazard.headline}</p>
+            <h2 className="text-xl font-black">{t('home.detected', { hazard: hazardLabel(activeHazard) })}</h2>
+            <p className="text-[11px] opacity-90 leading-relaxed max-w-[280px]">{hazardHeadline(worst.hazard)}</p>
             <div className="grid grid-cols-2 gap-3 w-full mt-1">
               <div className="bg-white/60 rounded-2xl p-3 flex flex-col items-center gap-1">
                 <HomeIcon className="w-4 h-4" />
@@ -292,7 +293,7 @@ export function HomeScreen({
             <span className="text-[11px] font-black text-slate-900">{t('nav.alerts')}</span>
             <span className={`text-[9.5px] font-mono ${worst ? 'text-rose-600' : 'text-slate-500'}`}>
               {worst
-                ? `${hazardInfo(activeHazard).label}${worst.impact.distanceKm !== null ? ` · ${Math.round(worst.impact.distanceKm)} km` : ''}`
+                ? `${hazardLabel(activeHazard)}${worst.impact.distanceKm !== null ? ` · ${Math.round(worst.impact.distanceKm)} km` : ''}`
                 : t('home.noActiveAlert')}
             </span>
           </button>

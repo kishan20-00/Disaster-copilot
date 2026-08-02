@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import type { Hazard, HazardSignal } from '@/types/domain';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardInfo, hazardLabel } from '@/constants/hazards';
 import { useT } from '@/i18n/context';
 
 interface HazardAdvisoryProps {
@@ -30,7 +30,7 @@ export function HazardAdvisory({ activeHazard, hazardSignal }: HazardAdvisoryPro
             the actual issuing source is already shown on the right. */}
         <span className="flex items-center gap-1.5 uppercase font-sans">
           <AlertTriangle className="w-3.5 h-3.5 animate-bounce" />
-          {hazard.emoji} {hazard.label}
+          {hazard.emoji} {hazardLabel(activeHazard)}
         </span>
         <span className="text-[9px] font-mono tracking-wider">
           {hazardSignal ? hazardSignal.source : t('advisory.awaitingFeed')}

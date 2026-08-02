@@ -1,7 +1,8 @@
 import { Radar, WifiOff, AlertTriangle, Footprints, Home, Eye, MapPin, Clock } from 'lucide-react';
 import type { ThreatScanState, Severity } from '@/lib/impact';
+import { hazardHeadline, hazardSource } from '@/services/alerts';
 import { fmtAge, fmtKm } from '@/lib/impact';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardInfo, hazardLabel } from '@/constants/hazards';
 import { useT } from '@/i18n/context';
 import type { MessageKey } from '@/i18n/messages';
 
@@ -126,7 +127,7 @@ export function AlertsSheet({ show, threatScan, isSimulating, onRescan }: Alerts
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[10.5px] font-extrabold tracking-wider uppercase flex items-center gap-1.5">
                       <span>{info.emoji}</span>
-                      {`${t(`severity.${impact.severity}`)} ${info.label}`.trim()}
+                      {`${t(`severity.${impact.severity}`)} ${hazardLabel(hazard.hazard)}`.trim()}
                     </span>
                     {impact.affected && (
                       <span className="text-[9px] font-black uppercase tracking-wide bg-white/60 px-2 py-0.5 rounded-md shrink-0">
@@ -135,7 +136,7 @@ export function AlertsSheet({ show, threatScan, isSimulating, onRescan }: Alerts
                     )}
                   </div>
 
-                  <p className="text-[11px] font-mono leading-snug break-words">{hazard.headline}</p>
+                  <p className="text-[11px] font-mono leading-snug break-words">{hazardHeadline(hazard)}</p>
 
                   {impact.affected && (
                     <div className="flex items-center gap-1.5 bg-white/60 rounded-xl px-2.5 py-1.5">
@@ -155,7 +156,7 @@ export function AlertsSheet({ show, threatScan, isSimulating, onRescan }: Alerts
                       <Clock className="w-3 h-3" />
                       {fmtAge(impact.ageMinutes)}
                     </span>
-                    <span>{hazard.source}</span>
+                    <span>{hazardSource(hazard)}</span>
                   </div>
                 </div>
               );

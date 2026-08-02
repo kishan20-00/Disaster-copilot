@@ -4,7 +4,7 @@ import type { ThreatScanState } from '@/lib/impact';
 import type { LatLng } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
 import { haversineMeters, formatDistance, bearingDegrees } from '@/services/maps';
-import { hazardInfo } from '@/constants/hazards';
+import { hazardInfo, hazardLabel } from '@/constants/hazards';
 import { useT } from '@/i18n/context';
 
 interface LiveNavigationViewProps {
@@ -115,7 +115,7 @@ export function LiveNavigationView({
         {worst && (
           <div className="self-end bg-red-950/80 backdrop-blur border border-red-500/40 text-red-200 text-[10.5px] font-bold px-3.5 py-2 rounded-full shadow-lg flex items-center gap-1.5">
             <span>{info.emoji}</span>
-            {info.label}
+            {hazardLabel(activeHazard)}
             {worst.impact.distanceKm !== null ? ` · ${Math.round(worst.impact.distanceKm)} km` : ''}
           </div>
         )}

@@ -1,4 +1,5 @@
 import type { LatLng } from '@/services/geolocation';
+import { tActive } from '@/i18n/context';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Family members the user has added themselves, with a place for each.
@@ -135,14 +136,20 @@ export const removeMember = (members: FamilyMember[], id: string): FamilyMember[
 
 export const memberPosition = (m: FamilyMember): LatLng => ({ lat: m.place.lat, lng: m.place.lng });
 
-/** "added 3 days ago" — the honest counterpart to the old fake "2 min ago". */
+/**
+ * "3 days ago" — the honest counterpart to the old fake "2 min ago".
+ *
+ * The "added " prefix is gone: the card already labels this chip "recorded", so
+ * the word was redundant in English and forced every other language to phrase
+ * itself around an English participle. Callers that stripped it with a regex no
+ * longer need to.
+ */
 export function describeAge(addedAt: string, now = Date.now()): string {
   const t = Date.parse(addedAt);
-  if (!Number.isFinite(t)) return 'added recently';
+  if (!Number.isFinite(t)) return tActive('age.recently');
   const mins = Math.max(0, (now - t) / 60_000);
-  if (mins < 60) return 'added just now';
+  if (mins < 60) return tActive('age.justNow');
   const hours = mins / 60;
-  if (hours < 24) return `added ${Math.round(hours)}h ago`;
-  const days = Math.round(hours / 24);
-  return `added ${days} day${days === 1 ? '' : 's'} ago`;
+  if (hours < 24) return tActive('age.hoursAgo', { n: Math.round(hours) });
+  return tActive('age.daysAgo', { n: Math.round(hours / 24) });
 }

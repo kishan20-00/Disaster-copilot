@@ -4,7 +4,7 @@ import type { Language } from '@/types/domain';
 import { getLangCode } from '@/lib/speech';
 import type { MessageKey, MessageVars } from './messages';
 import { translate } from './messages';
-import { LanguageContext } from './context';
+import { LanguageContext, setActiveLanguage } from './context';
 
 interface LanguageProviderProps {
   /**
@@ -18,6 +18,11 @@ interface LanguageProviderProps {
 }
 
 export function LanguageProvider({ language, children }: LanguageProviderProps) {
+  // Synchronously, during render rather than in an effect: children render
+  // before effects run, so an effect here would let the first paint after a
+  // language change use the previous one.
+  setActiveLanguage(language);
+
   // Tell the document what language it is in. Without this the page claims to be
   // English however it renders, which mis-pronounces every screen for a screen
   // reader and prompts browsers to "translate" text that is already translated.
