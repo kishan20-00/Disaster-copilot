@@ -274,137 +274,160 @@ export function useAgentPipeline(params: UseAgentPipelineParams) {
         }
         if (!stillCurrent()) return;
         markCompleted(0, situationResult);
+
+        // ── Fan-out: Personal ∥ Route ∥ Translate ──
+        // These three agents share no data dependency on each other — each reads
+        // the raw profile/hazard the gate already resolved — so they run
+        // concurrently instead of in series. currentStep jumps straight to 1
+        // (fan-out started) and every downstream consumer still keys off the
+        // >= 0 / >= 4 milestones, which are unchanged. Each branch marks its own
+        // agent complete as it finishes, so the console lights them up
+        // independently rather than in lock-step.
         setCurrentStep(1);
-
-        // ── Step 1: Personal Context Agent (resolves real address) ──
         markRunning(1);
-        let address: string | null = liveAddress;
-        if (!address && originPos) {
-          address = await reverseGeocode(originPos);
-          if (address) setLiveAddress(address);
-        }
-        const familyLine = family.length === 0
-          ? ' No family places saved.'
-          : familyAtRisk.length === 0
-          ? ` All ${family.length} saved family place(s) are outside the affected area.`
-          : ` ${familyAtRisk.length} of ${family.length} saved family place(s) fall inside the affected area: ` +
-            `${familyAtRisk.map((f) => `${f.member.name} at ${f.member.place.name}`).join('; ')}.`;
-
-        let personalResult = (address
-          ? `User at "${address}" — ${profile.floor}, ${profile.companions}, ${profile.mobility}.`
-          : `User context: ${profile.language}, ${profile.location}, ${profile.floor}, ${profile.companions}, ${profile.mobility}.`
-        ) + familyLine;
-        if (isGeminiConfigured) {
-          try {
-            personalResult = await runPersonalAgent(profile, address);
-          } catch (e) {
-            console.warn('Personal agent failed; using fallback.', e);
-            await wait(600);
-          }
-        } else {
-          await wait(1000);
-        }
-        if (!stillCurrent()) return;
-        markCompleted(1, personalResult);
-        setCurrentStep(2);
-
-        // ── Step 2: Route & Shelter Agent (fetches REAL walking directions) ──
         markRunning(2);
-        let walkingRoute: WalkingRoute | null = null;
-        // Only fetch a walking route when leaving is actually the advice.
-        if (mode === 'evacuate' && shelterPos && originPos && googleMapsLoaded) {
-          walkingRoute = await getWalkingRoute(originPos, shelterPos);
-          if (walkingRoute) {
-            setLiveRoute(walkingRoute);
-            setLiveShelter({
-              name: shelterInfo.name,
-              distanceMeters: walkingRoute.distanceMeters,
-              lat: shelterPos.lat,
-              lng: shelterPos.lng
-            });
-          }
-        }
+        markRunning(3);
 
-        const realDist = walkingRoute?.distanceText;
-        const realEta = walkingRoute?.durationText;
-        let routeResult = mode !== 'evacuate'
-          ? `${hazardInfo(hazard).label}: shelter in place. ${hazardInfo(hazard).rationale} No route issued — leaving would increase exposure.`
-          : walkingRoute
-          ? `${lookup.official ? 'Designated' : 'Candidate'} shelter: ${shelterInfo.name}. Walking ${realDist}, ETA ${realEta} via Google Directions.`
-          : `${lookup.official ? 'Designated' : 'Candidate'} shelter: ${shelterInfo.name} (${shelterInfo.detail}).`;
-        let stepsPromise: Promise<ActionStep[]> = Promise.resolve(fallbackSteps);
-        if (isGeminiConfigured) {
-          stepsPromise = generateActionSteps({
-            profile,
-            hazard,
-            shelterName: shelterInfo.name,
-            shelterDistance,
-            walkingDuration: realEta,
-            address
-          }).catch((e) => {
-            console.warn('Action-step generation failed; using fallback.', e);
-            return fallbackSteps;
-          });
-          try {
-            routeResult = await runRouteAgent({
+        const trackerUrl = livePosition
+          ? `https://maps.google.com/?q=${livePosition.lat.toFixed(5)},${livePosition.lng.toFixed(5)}`
+          : 'https://maps.google.com/';
+
+        // Branch 1 — Personal Context Agent (resolves real address).
+        const personalBranch = async () => {
+          let address: string | null = liveAddress;
+          if (!address && originPos) {
+            address = await reverseGeocode(originPos);
+            if (address && stillCurrent()) setLiveAddress(address);
+          }
+          const familyLine = family.length === 0
+            ? ' No family places saved.'
+            : familyAtRisk.length === 0
+            ? ` All ${family.length} saved family place(s) are outside the affected area.`
+            : ` ${familyAtRisk.length} of ${family.length} saved family place(s) fall inside the affected area: ` +
+              `${familyAtRisk.map((f) => `${f.member.name} at ${f.member.place.name}`).join('; ')}.`;
+
+          let personalResult = (address
+            ? `User at "${address}" — ${profile.floor}, ${profile.companions}, ${profile.mobility}.`
+            : `User context: ${profile.language}, ${profile.location}, ${profile.floor}, ${profile.companions}, ${profile.mobility}.`
+          ) + familyLine;
+          if (isGeminiConfigured) {
+            try {
+              personalResult = await runPersonalAgent(profile, address);
+            } catch (e) {
+              console.warn('Personal agent failed; using fallback.', e);
+              await wait(600);
+            }
+          } else {
+            await wait(1000);
+          }
+          if (!stillCurrent()) return;
+          markCompleted(1, personalResult);
+          return address;
+        };
+
+        // Branch 2 — Route & Shelter Agent (fetches REAL walking directions +
+        // generates the action steps). The long pole. Returns the steps so the
+        // Commander join can dispatch them.
+        const routeBranch = async (): Promise<ActionStep[]> => {
+          let walkingRoute: WalkingRoute | null = null;
+          // Only fetch a walking route when leaving is actually the advice.
+          if (mode === 'evacuate' && shelterPos && originPos && googleMapsLoaded) {
+            walkingRoute = await getWalkingRoute(originPos, shelterPos);
+            if (walkingRoute && stillCurrent()) {
+              setLiveRoute(walkingRoute);
+              setLiveShelter({
+                name: shelterInfo.name,
+                distanceMeters: walkingRoute.distanceMeters,
+                lat: shelterPos.lat,
+                lng: shelterPos.lng
+              });
+            }
+          }
+
+          const realDist = walkingRoute?.distanceText;
+          const realEta = walkingRoute?.durationText;
+          let routeResult = mode !== 'evacuate'
+            ? `${hazardInfo(hazard).label}: shelter in place. ${hazardInfo(hazard).rationale} No route issued — leaving would increase exposure.`
+            : walkingRoute
+            ? `${lookup.official ? 'Designated' : 'Candidate'} shelter: ${shelterInfo.name}. Walking ${realDist}, ETA ${realEta} via Google Directions.`
+            : `${lookup.official ? 'Designated' : 'Candidate'} shelter: ${shelterInfo.name} (${shelterInfo.detail}).`;
+          let steps: ActionStep[] = fallbackSteps;
+          if (isGeminiConfigured) {
+            const stepsPromise = generateActionSteps({
               profile,
               hazard,
               shelterName: shelterInfo.name,
               shelterDistance,
-              walkingDistance: realDist,
-              walkingDuration: realEta
+              walkingDuration: realEta,
+              address: liveAddress
+            }).catch((e) => {
+              console.warn('Action-step generation failed; using fallback.', e);
+              return fallbackSteps;
             });
-          } catch (e) {
-            console.warn('Route agent failed; using fallback.', e);
+            try {
+              routeResult = await runRouteAgent({
+                profile,
+                hazard,
+                shelterName: shelterInfo.name,
+                shelterDistance,
+                walkingDistance: realDist,
+                walkingDuration: realEta
+              });
+            } catch (e) {
+              console.warn('Route agent failed; using fallback.', e);
+            }
+            steps = await stepsPromise;
+          } else {
+            await wait(1000);
           }
-        } else {
-          await wait(1000);
-        }
-        if (!stillCurrent()) return;
-        markCompleted(2, routeResult);
-        setCurrentStep(3);
+          if (!stillCurrent()) return steps;
+          markCompleted(2, routeResult);
+          return steps;
+        };
 
-        // ── Step 3: Translate & Comms Agent (+ generate SMS in parallel) ──
-        markRunning(3);
-        const trackerUrl = livePosition
-          ? `https://maps.google.com/?q=${livePosition.lat.toFixed(5)},${livePosition.lng.toFixed(5)}`
-          : 'https://maps.google.com/';
-        let translateResult = `Draft text generated in ${profile.language}. Emergency contact parsed. Human validation required.`;
-        let smsPromise: Promise<string> = Promise.resolve('');
-        if (isGeminiConfigured) {
-          smsPromise = generateSmsDraft({
-            profile,
-            hazard,
-            shelterName: shelterInfo.name,
-            trackerUrl
-          }).catch((e) => {
-            console.warn('SMS draft failed; using fallback.', e);
-            return '';
-          });
-          try {
-            translateResult = await runTranslateAgent(profile);
-          } catch (e) {
-            console.warn('Translate agent failed; using fallback.', e);
+        // Branch 3 — Translate & Comms Agent (+ drafts the SMS). Returns the SMS
+        // text so the Commander join can hand it to the approval modal.
+        const translateBranch = async (): Promise<string> => {
+          let translateResult = `Draft text generated in ${profile.language}. Emergency contact parsed. Human validation required.`;
+          let sms = '';
+          if (isGeminiConfigured) {
+            const smsPromise = generateSmsDraft({
+              profile,
+              hazard,
+              shelterName: shelterInfo.name,
+              trackerUrl
+            }).catch((e) => {
+              console.warn('SMS draft failed; using fallback.', e);
+              return '';
+            });
+            try {
+              translateResult = await runTranslateAgent(profile);
+            } catch (e) {
+              console.warn('Translate agent failed; using fallback.', e);
+            }
+            sms = await smsPromise;
+          } else {
+            await wait(1200);
           }
-        } else {
-          await wait(1200);
-        }
-        if (!stillCurrent()) return;
-        markCompleted(3, translateResult);
-        setCurrentStep(4);
+          if (!stillCurrent()) return sms;
+          markCompleted(3, translateResult);
+          return sms;
+        };
 
-        // ── Step 4: Commander Agent (+ resolve steps + SMS) ──
-        markRunning(4);
-        const [steps, sms, commanderText] = await Promise.all([
-          stepsPromise,
-          smsPromise,
-          isGeminiConfigured
-            ? runCommanderAgent(profile, hazard).catch((e) => {
-                console.warn('Commander agent failed; using fallback.', e);
-                return `Command list compiled with 3 hyper-personalized steps in ${profile.language}. Layout dispatched.`;
-              })
-            : Promise.resolve(`Command list compiled with 3 hyper-personalized steps in ${profile.language}. Layout dispatched.`)
+        const [, steps, sms] = await Promise.all([
+          personalBranch(), routeBranch(), translateBranch()
         ]);
+        if (!stillCurrent()) return;
+
+        // ── Join: Commander Agent (synthesizes + dispatches) ──
+        setCurrentStep(4);
+        markRunning(4);
+        const commanderText = isGeminiConfigured
+          ? await runCommanderAgent(profile, hazard).catch((e) => {
+              console.warn('Commander agent failed; using fallback.', e);
+              return `Command list compiled with 3 hyper-personalized steps in ${profile.language}. Layout dispatched.`;
+            })
+          : `Command list compiled with 3 hyper-personalized steps in ${profile.language}. Layout dispatched.`;
         if (!stillCurrent()) return;
         setLiveSteps(steps && steps.length ? steps : fallbackSteps);
         if (sms) setLiveSmsDraft(sms);
