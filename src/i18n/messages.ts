@@ -78,6 +78,10 @@ const EN = {
   'category.station': 'Stations',
   'ar.standby': 'Trigger alert to activate AR navigation',
   'ar.alertSuffix': 'ALERT',
+  'ar.onCourse': 'On course — go straight',
+  'ar.turnRight': 'Turn right',
+  'ar.turnLeft': 'Turn left',
+  'ar.lookUp': 'Look up while walking',
 
   // Right-hand map control rail (tooltips only — the controls are icons)
   'controls.layers': 'Map Layers',
@@ -446,6 +450,10 @@ const JA: Catalogue = {
   'category.station': '駅',
   'ar.standby': '警報を発動するとARナビが利用できます',
   'ar.alertSuffix': '警報',
+  'ar.onCourse': 'この方向です — まっすぐ進んでください',
+  'ar.turnRight': '右へ曲がってください',
+  'ar.turnLeft': '左へ曲がってください',
+  'ar.lookUp': '歩くときは前を見てください',
 
   'controls.layers': '地図レイヤー',
   'controls.recenter': '現在地に戻す',
@@ -778,6 +786,10 @@ const ZH: Catalogue = {
   'category.station': '车站',
   'ar.standby': '触发警报后即可使用 AR 导航',
   'ar.alertSuffix': '警报',
+  'ar.onCourse': '方向正确 — 请直行',
+  'ar.turnRight': '向右转',
+  'ar.turnLeft': '向左转',
+  'ar.lookUp': '行走时请抬头看路',
 
   'controls.layers': '地图图层',
   'controls.recenter': '回到当前位置',
@@ -1110,6 +1122,10 @@ const VI: Catalogue = {
   'category.station': 'Nhà ga',
   'ar.standby': 'Kích hoạt cảnh báo để bật dẫn đường AR',
   'ar.alertSuffix': 'CẢNH BÁO',
+  'ar.onCourse': 'Đúng hướng — đi thẳng',
+  'ar.turnRight': 'Rẽ phải',
+  'ar.turnLeft': 'Rẽ trái',
+  'ar.lookUp': 'Nhìn lên khi đi bộ',
 
   'controls.layers': 'Lớp bản đồ',
   'controls.recenter': 'Về vị trí hiện tại',
