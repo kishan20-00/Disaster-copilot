@@ -2,6 +2,7 @@ import { Navigation, MapPin, Shield, Compass } from 'lucide-react';
 import type { LatLng } from '@/services/geolocation';
 import type { WalkingRoute } from '@/services/maps';
 import { getShelterInfo } from '@/lib/shelter';
+import { useT } from '@/i18n/context';
 
 interface LiveTelemetryCardProps {
   livePosition: LatLng | null;
@@ -17,6 +18,7 @@ interface LiveTelemetryCardProps {
 export function LiveTelemetryCard({
   livePosition, liveAddress, liveShelter, liveRoute, dynamicMarkers, shelterSource, focusName
 }: LiveTelemetryCardProps) {
+  const t = useT();
   // Straight-line distance to the nearest real shelter. Available as soon as GPS
   // and Places have landed, so the card is useful before any alert is triggered
   // — the walking route below only exists once the pipeline has run.
@@ -28,9 +30,9 @@ export function LiveTelemetryCard({
     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2">
       <div className="flex items-center gap-1.5 text-slate-600 pb-1.5 border-b border-slate-200">
         <Navigation className="w-4 h-4 text-emerald-600" />
-        <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans">Live Telemetry</span>
+        <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans">{t('telemetry.title')}</span>
         <span className="ml-auto text-[9px] font-mono uppercase text-slate-500">
-          {focusName ? 'VIEWING ELSEWHERE' : livePosition ? 'GPS LOCKED' : 'AWAITING GPS'}
+          {focusName ? t('telemetry.viewingElsewhere') : livePosition ? t('telemetry.gpsLocked') : t('telemetry.awaitingGps')}
         </span>
       </div>
       <div className="grid grid-cols-1 gap-1.5 text-[10.5px] font-mono">
@@ -38,34 +40,32 @@ export function LiveTelemetryCard({
           <MapPin className="w-3 h-3 text-indigo-500 mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">
             <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">
-              {focusName ? 'Checking' : 'You are at'}
+              {focusName ? t('telemetry.checking') : t('telemetry.youAreAt')}
             </span>
             <p className="text-slate-800 leading-snug break-words">
               {focusName || liveAddress || (livePosition
                 ? `${livePosition.lat.toFixed(5)}, ${livePosition.lng.toFixed(5)}`
-                : 'Acquiring device location…')}
+                : t('telemetry.acquiring'))}
             </p>
           </div>
         </div>
         <div className="flex items-start gap-1.5">
           <Shield className="w-3 h-3 text-emerald-600 mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">
-            <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">Nearest shelter</span>
+            <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">{t('telemetry.nearestShelter')}</span>
             <p className="text-slate-800 leading-snug break-words">
-              {shelterName ?? 'Awaiting Places data…'}
+              {shelterName ?? t('telemetry.awaitingPlaces')}
             </p>
             {hasShelter && (
               <p className="text-slate-500 text-[9.5px] leading-snug mt-0.5">
-                {nearest.distance} away · straight line
+                {t('telemetry.straightLine', { distance: nearest.distance })}
               </p>
             )}
             {shelterSource && (
               <p className={`text-[9px] font-mono leading-snug mt-0.5 ${
                 shelterSource === 'official' ? 'text-emerald-600' : 'text-amber-600'
               }`}>
-                {shelterSource === 'official'
-                  ? '✓ officially designated for this hazard'
-                  : '⚠ no official register here — nearby place, not a shelter'}
+                {shelterSource === 'official' ? t('telemetry.official') : t('telemetry.unofficial')}
               </p>
             )}
           </div>
@@ -74,9 +74,9 @@ export function LiveTelemetryCard({
           <div className="flex items-start gap-1.5">
             <Compass className="w-3 h-3 text-amber-500 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">Walking route</span>
+              <span className="text-slate-500 uppercase tracking-wide font-bold text-[9px]">{t('telemetry.walkingRoute')}</span>
               <p className="text-slate-800 leading-snug">
-                {liveRoute.distanceText} · ETA {liveRoute.durationText}
+                {t('telemetry.routeSummary', { distance: liveRoute.distanceText, duration: liveRoute.durationText })}
               </p>
             </div>
           </div>

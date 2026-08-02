@@ -1,5 +1,6 @@
 import { MapPin, Compass, WifiOff, ShieldAlert, Clock, SatelliteDish } from 'lucide-react';
 import type { LocationState } from '@/hooks/useGeolocation';
+import { useT } from '@/i18n/context';
 
 interface EnableLocationStateProps {
   mapsReady: boolean;
@@ -15,76 +16,71 @@ interface EnableLocationStateProps {
 // work: once the permission is blocked, the browser fails the request instantly
 // without prompting, so tapping appeared to do nothing at all.
 export function EnableLocationState({ mapsReady, location, onRetry }: EnableLocationStateProps) {
+  const t = useT();
   const mapsUnavailable = !mapsReady;
   const pending = mapsReady && location.status === 'pending';
 
   const view = mapsUnavailable
     ? {
         Icon: WifiOff, amber: true,
-        title: 'Maps unavailable',
-        body: 'SafeRoute AI needs the Google Maps service to find shelters and routes near you. Check your connection, or configure VITE_GOOGLE_MAPS_API_KEY.',
+        title: t('location.maps.title'),
+        body: t('location.maps.body'),
         retry: false, steps: [] as string[]
       }
     : pending
     ? {
         Icon: Compass, amber: false,
-        title: 'Locating you…',
-        body: 'Getting your position to map nearby shelters, water and medical points. Indoors this can take a few seconds while it falls back to a network fix.',
+        title: t('location.pending.title'),
+        body: t('location.pending.body'),
         retry: false, steps: []
       }
     : location.reason === 'denied'
     ? {
         Icon: ShieldAlert, amber: true,
-        title: 'Location is blocked',
-        body: 'Your browser is refusing the request, which is why nothing happens when you tap. It has to be re-allowed in settings — the app cannot ask again on its own.',
+        title: t('location.denied.title'),
+        body: t('location.denied.body'),
         retry: true,
         steps: [
-          'Safari on iPhone: tap the page-settings icon at the left of the address bar, then Website Settings → Location → Ask or Allow.',
-          'If that option is not there: Settings → Safari (listed under “Apps” on newer iOS) → Location → Ask.',
-          'Added to your Home Screen? Settings → SafeRoute AI → Location → While Using the App.',
-          'Also check Settings → Privacy & Security → Location Services is switched on.'
+          t('location.denied.step1'),
+          t('location.denied.step2'),
+          t('location.denied.step3'),
+          t('location.denied.step4')
         ]
       }
     : location.reason === 'insecure'
     ? {
         Icon: ShieldAlert, amber: true,
-        title: 'Needs a secure connection',
-        body: 'Browsers only give location to pages served over HTTPS. Open the https:// address for this site — on http it can never work, however many times you tap.',
+        title: t('location.insecure.title'),
+        body: t('location.insecure.body'),
         retry: false, steps: []
       }
     : location.reason === 'timeout'
     ? {
         Icon: Clock, amber: false,
-        title: 'Location is taking too long',
-        body: 'Your device could not get a fix in time, even after retrying at reduced accuracy. That is normal deep inside buildings, basements and trains.',
+        title: t('location.timeout.title'),
+        body: t('location.timeout.body'),
         retry: true,
-        steps: [
-          'Move near a window or step outside, then try again.',
-          'Turn Wi-Fi on — it speeds up positioning even when you are not connected to a network.'
-        ]
+        steps: [t('location.timeout.step1'), t('location.timeout.step2')]
       }
     : location.reason === 'unavailable'
     ? {
         Icon: SatelliteDish, amber: true,
-        title: 'Position unavailable',
-        body: 'The device reported that it cannot work out a position at the moment.',
+        title: t('location.unavailable.title'),
+        body: t('location.unavailable.body'),
         retry: true,
-        steps: [
-          'Check Location Services is enabled for your device.',
-          'Switch Airplane Mode off if it is on.'
-        ]
+        steps: [t('location.unavailable.step1'), t('location.unavailable.step2')]
       }
     : location.reason === 'unsupported'
     ? {
         Icon: WifiOff, amber: true,
-        title: 'Not supported here',
-        body: 'This browser does not offer location at all. Try Safari or Chrome.',
+        title: t('location.unsupported.title'),
+        body: t('location.unsupported.body'),
         retry: false, steps: []
       }
     : {
         Icon: MapPin, amber: false,
-        title: 'Enable location',
-        body: 'SafeRoute AI works from your real position. Allow location access so it can check live hazards against where you actually are.',
+        title: t('location.default.title'),
+        body: t('location.default.body'),
         retry: true, steps: []
       };
 
@@ -125,7 +121,7 @@ export function EnableLocationState({ mapsReady, location, onRetry }: EnableLoca
           className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-full shadow-lg hover:shadow-indigo-500/20 active:scale-95 transition-all shrink-0"
         >
           <MapPin className="w-4 h-4" />
-          {location.reason === 'denied' ? 'I’ve allowed it — try again' : 'Try again'}
+          {location.reason === 'denied' ? t('location.retryAllowed') : t('location.retry')}
         </button>
       )}
     </div>

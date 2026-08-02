@@ -1,5 +1,6 @@
 import { Volume2, Mic } from 'lucide-react';
 import type { ActionStep } from '@/types/domain';
+import { useT } from '@/i18n/context';
 
 interface VoiceFeedPanelProps {
   currentStep: number;
@@ -11,6 +12,7 @@ interface VoiceFeedPanelProps {
 }
 
 export function VoiceFeedPanel({ currentStep, firstStep, isListening, heardText, sttFeedback, onToggleSpeech }: VoiceFeedPanelProps) {
+  const t = useT();
   return (
     <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-3.5 space-y-3 animate-in zoom-in-95 duration-200">
       <div className="flex gap-2.5 items-center">
@@ -21,13 +23,13 @@ export function VoiceFeedPanel({ currentStep, firstStep, isListening, heardText,
           </div>
         </div>
         <div className="flex-1 text-[10.5px]">
-          <span className="font-extrabold uppercase text-emerald-700 block tracking-wide font-sans text-[9.5px]">Voice Assistant & Control Active</span>
+          <span className="font-extrabold uppercase text-emerald-700 block tracking-wide font-sans text-[9.5px]">{t('voice.active')}</span>
           <p className="text-slate-600 font-mono leading-relaxed mt-0.5">
             {currentStep >= 4
-              ? `”${firstStep?.title || 'Route ready'}. ${firstStep?.desc || 'Follow the highlighted paths.'}”`
+              ? `“${firstStep?.title || t('voice.fallbackTitle')}. ${firstStep?.desc || t('voice.fallbackDesc')}”`
               : currentStep >= 0
-              ? '”Analyzing situation. Stand by for evacuation instructions.”'
-              : '”Standing by. Speak to customize your profile or say \'trigger simulation\'.”'}
+              ? `“${t('voice.analyzing')}”`
+              : `“${t('voice.standby')}”`}
           </p>
         </div>
       </div>
@@ -44,16 +46,16 @@ export function VoiceFeedPanel({ currentStep, firstStep, isListening, heardText,
             }`}
           >
             <Mic className={`w-3.5 h-3.5 ${isListening ? 'text-red-500 animate-pulse' : 'text-emerald-600'}`} />
-            {isListening ? 'Listening...' : 'Tap to Speak'}
+            {isListening ? t('voice.listening') : t('voice.tapToSpeak')}
           </button>
           <div className="flex-1 min-w-0 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 h-8 flex items-center">
             <span className="text-[10px] font-mono text-slate-500 truncate w-full">
               {heardText ? (
-                <span className="text-slate-800 font-semibold">Heard: "{heardText}"</span>
+                <span className="text-slate-800 font-semibold">{t('voice.heard', { text: heardText })}</span>
               ) : isListening ? (
-                <span className="text-red-500 animate-pulse">Say "wheelchair", "3rd floor", "trigger"...</span>
+                <span className="text-red-500 animate-pulse">{t('voice.hint')}</span>
               ) : (
-                'Voice control ready...'
+                t('voice.ready')
               )}
             </span>
           </div>

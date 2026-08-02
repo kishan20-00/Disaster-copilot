@@ -1,5 +1,6 @@
 import { Activity, Check } from 'lucide-react';
 import type { AgentState } from '@/types/domain';
+import { useT } from '@/i18n/context';
 
 interface AgentPipelineConsoleProps {
   agents: AgentState[];
@@ -7,11 +8,12 @@ interface AgentPipelineConsoleProps {
 }
 
 export function AgentPipelineConsole({ agents, currentStep }: AgentPipelineConsoleProps) {
+  const t = useT();
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5">
       <h3 className="text-[10.5px] font-bold tracking-wider uppercase text-slate-500 flex items-center gap-1.5 mb-2.5 pb-1 border-b border-slate-200">
         <Activity className="w-3.5 h-3.5 text-indigo-500" />
-        Multi-Agent Pipeline Logs
+        {t('agents.title')}
       </h3>
       <div className="space-y-2">
         {agents.map((agent: any, i: number) => {
@@ -27,9 +29,9 @@ export function AgentPipelineConsole({ agents, currentStep }: AgentPipelineConso
                   <span className="text-[9px] text-slate-500 font-mono">({agent.role})</span>
                 </div>
                 <div>
-                  {agent.status === 'running' && <span className="text-[9px] text-indigo-500 font-bold animate-pulse font-mono uppercase">Thinking</span>}
-                  {agent.status === 'completed' && <span className="text-[9px] text-emerald-600/80 font-mono font-bold uppercase">Ready</span>}
-                  {agent.status === 'idle' && <span className="text-[9px] text-slate-400 font-mono font-semibold uppercase">Pending</span>}
+                  {agent.status === 'running' && <span className="text-[9px] text-indigo-500 font-bold animate-pulse font-mono uppercase">{t('agents.thinking')}</span>}
+                  {agent.status === 'completed' && <span className="text-[9px] text-emerald-600/80 font-mono font-bold uppercase">{t('agents.ready')}</span>}
+                  {agent.status === 'idle' && <span className="text-[9px] text-slate-400 font-mono font-semibold uppercase">{t('agents.pending')}</span>}
                 </div>
               </div>
 

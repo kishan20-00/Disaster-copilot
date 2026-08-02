@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Shield } from 'lucide-react';
 import { markSplashSeen, prefersReducedMotion } from '@/lib/splash';
+import { useT } from '@/i18n/context';
 
 interface SplashScreenProps {
   onDone: () => void;
@@ -20,6 +21,7 @@ const FADE_MS = 420;
 //   * nothing in the app waits on it — auth, Maps and the feeds all start behind
 //     it, so this costs no time at all
 export function SplashScreen({ onDone }: SplashScreenProps) {
+  const t = useT();
   const reduced = prefersReducedMotion();
   const duration = reduced ? REDUCED_MS : FULL_MS;
   const [leaving, setLeaving] = useState(false);
@@ -46,7 +48,7 @@ export function SplashScreen({ onDone }: SplashScreenProps) {
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') skip(); }}
-      aria-label="Skip introduction"
+      aria-label={t('splash.skipLabel')}
       className={`absolute inset-0 z-[60] flex flex-col items-center justify-center bg-white cursor-pointer select-none transition-opacity ease-out ${
         leaving ? 'opacity-0' : 'opacity-100'
       }`}
@@ -114,7 +116,7 @@ export function SplashScreen({ onDone }: SplashScreenProps) {
         className={`text-[9px] font-mono text-slate-400 tracking-wider uppercase mt-5 ${reduced ? '' : 'splash-rise'}`}
         style={reduced ? undefined : { animationDelay: '620ms' }}
       >
-        Tap to skip
+        {t('splash.skip')}
       </span>
     </div>
   );

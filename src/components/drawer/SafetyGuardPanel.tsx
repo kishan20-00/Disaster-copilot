@@ -3,6 +3,7 @@ import type { FamilyMember } from '@/lib/familyStore';
 import type { FamilyStatus } from '@/lib/familyStatus';
 import { familyVerdict } from '@/lib/familyStatus';
 import type { ThreatScanState } from '@/lib/impact';
+import { useT } from '@/i18n/context';
 
 interface SafetyGuardPanelProps {
   family: FamilyMember[];
@@ -38,14 +39,15 @@ interface SafetyGuardPanelProps {
 // not "is your child safe" — nothing here can know that — but "is the school you
 // told me about inside the warning area", which is true and useful.
 export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfile }: SafetyGuardPanelProps) {
+  const t = useT();
   const inHarm = (familyStatus ?? []).filter((f) => f.impact.affected).length;
   const unassessed = familyVerdict(null, scanStatus);
 
   const statusText = family.length === 0
-    ? 'No one added yet'
+    ? t('guard.noneAdded')
     : familyStatus === null
     ? unassessed.label
-    : inHarm > 0 ? `${inHarm} in affected area` : 'None in affected area';
+    : inHarm > 0 ? t('guard.inAffected', { count: inHarm }) : t('guard.noneAffected');
 
   const statusColor = family.length === 0
     ? 'text-slate-500'
@@ -60,7 +62,7 @@ export function SafetyGuardPanel({ family, familyStatus, scanStatus, onOpenProfi
     >
       <div className="flex items-center gap-1.5">
         <Users className="w-4 h-4 text-indigo-500 shrink-0" />
-        <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans text-slate-600">Family places</span>
+        <span className="text-[10.5px] font-extrabold tracking-wider uppercase font-sans text-slate-600">{t('guard.title')}</span>
       </div>
       <div className="flex items-center gap-1 shrink-0">
         <span className={`text-[9px] font-mono font-bold uppercase ${statusColor}`}>{statusText}</span>

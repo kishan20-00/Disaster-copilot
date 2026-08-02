@@ -2,6 +2,8 @@ import type { RefObject } from 'react';
 import { Navigation } from 'lucide-react';
 import type { ActionStep, Hazard } from '@/types/domain';
 import type { WalkingRoute } from '@/services/maps';
+import { hazardInfo } from '@/constants/hazards';
+import { useT } from '@/i18n/context';
 
 interface AROverlayProps {
   cameraMode: boolean;
@@ -19,7 +21,9 @@ export function AROverlay({
   cameraMode, cameraRef, currentStep, activeHazard,
   shelterName, shelterDistance, liveRoute, firstStep
 }: AROverlayProps) {
+  const t = useT();
   if (!cameraMode) return null;
+  const hazard = hazardInfo(activeHazard);
   return (
     <>
       {/* AR LIVE CAMERA FEED */}
@@ -43,9 +47,13 @@ export function AROverlay({
             activeHazard === 'typhoon' ? 'bg-sky-900/70 border-sky-500/60' :
             'bg-amber-900/70 border-amber-500/60'
           }`}>
+            {/* Was a three-way ternary that fell through to "TSUNAMI WARNING"
+                for everything else, so a wildfire or a landslide announced
+                itself as a tsunami. Reads the hazard table instead, which covers
+                all twelve. The label itself is still English until the table is
+                localized — see the i18n phase notes. */}
             <span className="text-white font-black text-xs uppercase tracking-widest">
-              {activeHazard === 'earthquake' ? '⚠️ EARTHQUAKE ALERT' :
-               activeHazard === 'typhoon' ? '🌀 TYPHOON WARNING' : '🌊 TSUNAMI WARNING'}
+              {hazard.emoji} {hazard.label} {t('ar.alertSuffix')}
             </span>
           </div>
         )}
@@ -73,7 +81,7 @@ export function AROverlay({
             </>
           ) : (
             <div className="bg-white/75 backdrop-blur-md border border-slate-200 rounded-2xl px-5 py-3 text-center">
-              <p className="text-slate-600 text-xs font-mono">Trigger alert to activate AR navigation</p>
+              <p className="text-slate-600 text-xs font-mono">{t('ar.standby')}</p>
             </div>
           )}
         </div>
