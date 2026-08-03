@@ -1,71 +1,172 @@
-# Mamori AI - Personal Disaster Co-pilot 🛡️安心守り
+# SafeRoute AI — Personal Disaster Co-pilot 🛡️ 安心避難
 
-A premium, offline-first, multi-agent disaster co-pilot with a strict human-approval safety gate. Designed to deliver an immersive, high-fidelity experience for the **Gemini AI Hackathon @ Google Japan (Shibuya Stream)**.
+An offline-first, multi-agent disaster co-pilot for Japan's earthquakes, tsunamis, and
+typhoons. SafeRoute AI reads live hazard feeds, reasons about **your** personal constraints
+(language, floor, children, mobility), routes you to an official designated shelter, and
+guides you there hands-free with an AR camera view — all behind a strict human-approval
+safety gate, and with a grounded voice assistant that answers "what do I do in an
+earthquake?" out loud.
 
-Unlike generic broadcaster systems, **Mamori AI** acts as a personal advisor—analyzing the JMA live feed, factoring in personal constraints (language, floor level, children, mobility), routing safe paths, translating critical Japanese signage, and drafting an emergency SMS to family with an active location tracker.
-
----
-
-## 🛠️ The Tech Stack (Hackathon Powerhouse)
-
-* **Framework**: React 19 + TypeScript (Scaffolded with Vite for sub-second hot reloads)
-* **Styling**: **Tailwind CSS v4** (The latest, ultra-fast CSS utility-first framework)
-* **Icons**: **Lucide React** (Premium, clean vector outline icons)
-* **Progressive Web App (PWA)**: **Vite PWA Plugin** (Configured with automated Service Workers, caching, custom splash screens, and standalone fullscreen capabilities)
-* **Target Audience**: Built for Japan's high-density urban areas, with deep focus on foreign-language residents and tourists (supports English, Chinese, Vietnamese, and Japanese).
+Built for Japan's dense urban areas with a deep focus on foreign residents and tourists —
+the entire app is available in **English, 日本語, 中文, and Tiếng Việt**.
 
 ---
 
-## 🚀 Getting Started
+## What it does
 
-### 1. Local Development
-Start the ultra-fast local development server with Hot Module Replacement (HMR):
+- **Situation awareness** — pulls live quakes/tsunami/typhoon advisories and decides whether
+  anything actually threatens *your* location before alarming you.
+- **Personalized action plan** — a multi-agent pipeline turns the raw hazard into concrete,
+  ranked steps tailored to your profile.
+- **Safe routing** — finds the nearest *official* designated emergency shelter
+  (指定緊急避難場所) and a walking route to it.
+- **AR camera guidance** — hold the phone up and a compass-anchored arrow points at the
+  shelter in the real world, with a haptic "on-course" pulse for smoke/low-visibility.
+- **Grounded voice assistant** — ask safety questions by voice and get spoken answers drawn
+  only from an official Japan safety guide (works offline via a keyword fallback).
+- **Family SMS** — drafts an emergency SMS to your contacts with a live location link — sent
+  only after you approve it.
+
+---
+
+## Architecture: the agent pipeline
+
+The core is a **gate → fan-out → join** pipeline (`src/hooks/useAgentPipeline.ts`), surfaced
+live in the in-app "AI Agent Status" console:
+
+```
+                        ┌─ Personal Agent ─┐
+   Situation Agent ────▶├─ Route Agent    ─┤────▶ Commander Agent
+     (gate)             └─ Translate Agent ┘        (join)
+```
+
+1. **Situation Agent (gate).** Scores live hazards against your GPS location. If nothing
+   crosses the action threshold, it stops the run here — the three middle agents stay
+   *pending by design*, not as a bug. Only a real, local hazard opens the gate.
+2. **Personal ∥ Route ∥ Translate (fan-out).** These run concurrently — they each read the
+   raw hazard and your profile, not each other's output, so serializing them would only add
+   dead wall-clock in a scenario where seconds matter:
+   - **Personal** — reverse-geocodes your position and builds profile-aware action steps.
+   - **Route** — looks up the nearest official shelter and a walking route.
+   - **Translate** — localizes critical guidance and drafts the family SMS.
+3. **Commander Agent (join).** Merges the three branches into the final, ranked plan and opens
+   the SMS approval modal.
+
+`currentStep` is a coarse phase milestone read app-wide: `≥ 0` a run has started, `=== 0`
+fires the one-shot voice announcement, `≥ 4` the plan is complete.
+
+---
+
+## Voice hazard assistant
+
+The home voice box is a grounded Q&A assistant (`src/services/gemini.ts` →
+`askHazardQuestion`, `src/data/safetyGuide.ts`). Ask things like *"What should I do in an
+earthquake?"* or *"How do I prepare for a typhoon?"* and it answers in your language, in one
+to three short spoken sentences, using **only** a distilled official Japan safety guide
+(emergency numbers 110/119/118, Drop-Cover-Hold, tsunami-uphill, 72-hour go-bag, etc.). It
+still recognizes profile-customization and `trigger` commands. With no Gemini key configured
+it falls back to an offline keyword matcher, so core answers work without a network.
+
+## AR camera guidance
+
+In camera mode (`src/components/map/AROverlay.tsx` + `src/hooks/useDeviceHeading.ts`), the
+direction arrow is anchored to the real world: the device compass heading is combined with
+the GPS bearing to the shelter, so the arrow points where you must actually turn — not at a
+fixed decorative angle. It shows turn-left / turn-right / on-course, pulses the haptic motor
+the moment you swing onto the correct bearing, and keeps a "look up while walking" banner up
+so you don't walk face-down into a hazard. On iOS the compass is requested behind the
+required user-gesture permission gate; where it's unavailable the arrow falls back to the raw
+GPS bearing.
+
+---
+
+## Tech stack
+
+- **React 19 + TypeScript**, scaffolded with **Vite**
+- **Tailwind CSS v4** for styling, **Lucide React** icons
+- **PWA** via the Vite PWA plugin (service worker, offline caching, installable)
+- **Google Gemini** (`@google/genai`, default `gemini-2.5-flash`) for agent reasoning and the
+  voice assistant
+- **Web Speech API** for speech-to-text / text-to-speech in all four languages
+- **DeviceOrientation** compass + **Vibration** API for AR guidance
+- **i18n**: a lightweight `LanguageProvider` / `useT()` system (`src/i18n/`) with four language
+  blocks
+
+### Data sources
+
+- **JMA** — earthquake, tsunami, and typhoon feeds (Japan)
+- **USGS** — worldwide earthquakes
+- **GDACS** — global disaster alerts
+- **GSI** (`cyberjapandata.gsi.go.jp`) — official designated emergency shelters
+- **Google Maps / Places** — geocoding and walking routes
+- **Google Identity Services** — OAuth sign-in
+
+---
+
+## Getting started
+
+### 1. Configure environment
+
+Copy `.env.example` to `.env` and fill in your keys:
+
 ```bash
+cp .env.example .env
+```
+
+| Variable | Purpose |
+|---|---|
+| `VITE_GOOGLE_CLIENT_ID` | Google Identity Services OAuth client (sign-in) |
+| `VITE_GOOGLE_MAPS_API_KEY` | Google Maps JavaScript API + Places (geocode, routes) |
+| `VITE_GEMINI_API_KEY` | Gemini API key (agents + voice assistant) |
+| `VITE_GEMINI_MODEL` | Optional model override (default `gemini-2.5-flash`) |
+
+The app degrades gracefully without keys: the pipeline uses offline fallbacks and the voice
+assistant answers from the bundled safety guide.
+
+### 2. Develop
+
+```bash
+npm install
 npm run dev
 ```
-Open [http://localhost:5173](http://localhost:5173) on your laptop.
 
-### 2. Compile Standalone Production PWA
-To build the fully optimized, production-ready bundle with assets, manifest configurations, and offline-caching service workers:
+Open [http://localhost:5173](http://localhost:5173).
+
+### 3. Quality checks
+
 ```bash
-npm run build
-```
-This generates the standalone files inside the `dist/` directory.
-
----
-
-## 🌐 Instant Live Deployments (The Stage QR Playbook)
-
-To let the judges scan a QR code and use Mamori AI directly on their personal iPhones/Androids, deploy the app live in seconds:
-
-### Path A: Zero-Config Vercel Deployment (Highly Recommended)
-Deploy to Vercel instantly without installing any global packages:
-```bash
-npx vercel
-```
-* **Process**: Vercel will guide you through a quick 3-question terminal prompt. Select **Yes** for everything. 
-* **Outcome**: It compiles, uploads, and gives you a live production URL (`https://your-project.vercel.app`) in under 30 seconds.
-
-### Path B: Netlify Deployment
-To deploy directly using Netlify:
-```bash
-npx netlify-cli deploy --dir=dist --prod
+npm run lint        # oxlint
+npm run build       # tsc -b && vite build (also the type-check gate)
 ```
 
 ---
 
-## 🏆 The Shibuya Hackathon Presentation Playbook
+## Deployment
 
-Maximize your 2-minute pitch window with this high-reliability workflow:
+```bash
+npm run build                 # standalone PWA in dist/
 
-### Step 1: The Projector Showcase (iOS Simulator)
-During the pitch, do not worry about physical screen sharing lag. Run the native-looking **Xcode iOS Simulator** on your Mac:
-1. Open the Simulator: `open -a Simulator` (or open Xcode ➔ Developer Tools ➔ Simulator).
-2. Open Safari in the Simulator and load your local address: `http://localhost:5173`.
-3. Present this screen on the stage projector. It looks 100% like a native iPhone app and is immune to network drops.
+npx vercel                    # zero-config Vercel deploy
+npx netlify-cli deploy --dir=dist --prod   # Netlify
 
-### Step 2: The Judge's Hands-On (The QR Magic)
-1. Convert your live Vercel/Netlify URL into a QR code (using any free online QR generator).
-2. Place this QR code on your **Final Slide**.
-3. Instruct the judges: *"Scan the QR code with your iPhone, tap 'Share', and select 'Add to Home Screen'."*
-4. The judges will get a full-screen, responsive mobile app running natively on their own phones, with custom splash screens and offline support, blowing away the competition.
+npm run deploy                # Firebase Hosting (firebase-tools)
+npm run deploy:run            # Google Cloud Run
+```
+
+The built `dist/` is a fully static, installable PWA — scan the deployed URL on a phone and
+"Add to Home Screen" for a full-screen native-feeling app with offline support.
+
+---
+
+## Project layout
+
+```
+src/
+  components/   UI — home, map/AR, drawer (agent console), shell, profile
+  hooks/        useAgentPipeline, useDeviceHeading, useVoiceAssistant, useGoogleMaps
+  services/     gemini, maps, geolocation, hazard feeds
+  data/         safetyGuide (grounding for the voice assistant)
+  constants/    agents, hazards
+  i18n/         LanguageProvider, useT, messages (4 languages)
+  types/        domain models
+```
