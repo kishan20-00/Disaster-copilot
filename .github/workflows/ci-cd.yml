@@ -37,22 +37,12 @@ jobs:
       - name: 📦 Install Dependencies
         run: npm ci
 
-      - name: 📝 Generate .env from Secrets
-        # Vite inlines VITE_* at build time, so every client key must be present
-        # now. Missing secrets (e.g. on fork PRs) just fall back to the app's
-        # built-in offline behavior — the build still succeeds.
-        run: |
-          {
-            echo "VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}"
-            echo "VITE_GOOGLE_MAPS_API_KEY=${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}"
-            echo "VITE_GEMINI_API_KEY=${{ secrets.VITE_GEMINI_API_KEY }}"
-            echo "VITE_GEMINI_MODEL=${{ secrets.VITE_GEMINI_MODEL }}"
-          } > .env
-
       - name: 🔍 Lint (oxlint)
         run: npm run lint
 
       - name: 🧱 Type-check & Production Build
+        # Keyless compile check — the app builds fine without VITE_* (offline
+        # fallbacks). The real keys are baked only in the deploy job below.
         run: npm run build
 
   deploy-to-cloud-run:
@@ -60,6 +50,13 @@ jobs:
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+
+    # Binds this job to the "Production" GitHub Environment so it reads that
+    # environment's secrets (GCP_SA_KEY + all VITE_* keys) — the single source
+    # of truth for deploy secrets.
+    environment:
+      name: Production
+      url: https://disaster-copilot-518748782043.us-central1.run.app
 
     permissions:
       contents: read
